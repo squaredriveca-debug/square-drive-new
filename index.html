@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         :root { --sd-green: #16a34a; --sd-dark: #111827; }
@@ -22,59 +23,15 @@
         
         @media print {
             body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            
-            /* Hide all background layout elements */
             nav, section, footer { display: none !important; }
-            
-            /* 1. Turn the fixed backdrop into a normal document block */
-            .fixed.inset-0 {
-                position: absolute !important;
-                top: 0 !important; left: 0 !important; right: 0 !important;
-                display: block !important; 
-                background: white !important;
-                backdrop-filter: none !important;
-            }
-            
-            /* 2. Un-restrict the modal container itself */
-            .fixed.inset-0 > div {
-                max-height: none !important; 
-                height: auto !important; 
-                overflow: visible !important;
-                display: block !important; 
-                box-shadow: none !important;
-            }
-
-            /* 3. Disable all scrollbars and height locks inside the modals */
-            .overflow-y-auto, .overflow-hidden, div[class*="max-h-"] { 
-                overflow: visible !important; 
-                max-height: none !important; 
-                height: auto !important; 
-            }
-            
-            /* Specific overrides for the printable wrappers */
-            #manifest-area, #contact-directory-print, #revenue-print-area { 
-                position: static !important;
-                display: block !important;
-                height: auto !important;
-                overflow: visible !important;
-            }
-            
-            /* Maintain Ticket Card Centering */
-            #ticket-card {
-                position: relative !important;
-                margin: 0 auto !important;
-                width: 100% !important;
-                max-width: 500px !important;
-                border: 2px solid #e2e8f0 !important;
-                box-shadow: none !important;
-                page-break-inside: avoid;
-            }
-            
+            .fixed.inset-0 { position: absolute !important; top: 0 !important; left: 0 !important; right: 0 !important; display: block !important; background: white !important; backdrop-filter: none !important; }
+            .fixed.inset-0 > div { max-height: none !important; height: auto !important; overflow: visible !important; display: block !important; box-shadow: none !important; }
+            .overflow-y-auto, .overflow-hidden, div[class*="max-h-"] { overflow: visible !important; max-height: none !important; height: auto !important; }
+            #manifest-area, #contact-directory-print, #revenue-print-area { position: static !important; display: block !important; height: auto !important; overflow: visible !important; }
+            #ticket-card { position: relative !important; margin: 0 auto !important; width: 100% !important; max-width: 500px !important; border: 2px solid #e2e8f0 !important; box-shadow: none !important; page-break-inside: avoid; }
             .no-print { display: none !important; }
             .print-header { display: block !important; margin-bottom: 2rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 1rem; text-align: center; }
             .print-break-avoid { break-inside: avoid; page-break-inside: avoid; }
-            
-            /* Ensure Tables break cleanly across pages */
             table { page-break-inside: auto; width: 100% !important; }
             tr { page-break-inside: avoid; page-break-after: auto; }
             thead { display: table-header-group; }
@@ -96,7 +53,6 @@
         if (window.supabase) {
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         }
-        // ------------------------------
 
         const EMAILJS_PUBLIC_KEY = "9EVo1NqFOOmGWKndd";
         const EMAILJS_PRIVATE_KEY = "L_sKs7-2b_Jx9M1OZ9mgj";
@@ -210,6 +166,7 @@
                     super: { code: 'super', phone: '9920788088', email: 'squaredriveca@gmail.com' }
                 };
             });
+            
             const [slotPrices, setSlotPrices] = useState(() => JSON.parse(localStorage.getItem('sd_prices_v30')) || TIME_SLOTS.reduce((a, s) => ({ ...a, [s]: 500 }), {}));
             const [userCredits, setUserCredits] = useState(() => JSON.parse(localStorage.getItem('sd_credits_v30')) || {});
             const [blockedDays, setBlockedDays] = useState(() => JSON.parse(localStorage.getItem('sd_blocked_v30')) || {});
@@ -254,7 +211,6 @@
             const [screenshotPreview, setScreenshotPreview] = useState(null);
             const [isProcessing, setIsProcessing] = useState(false);
 
-            // Supabase Global Load & Sync State
             const [isAppReady, setIsAppReady] = useState(false);
 
             // 1. Fetch remote data from Supabase on Initial Load
@@ -289,7 +245,7 @@
 
             // 2. Master Sync: Save to both LocalStorage (backup) and Supabase (cloud) whenever state changes
             useEffect(() => {
-                if (!isAppReady) return; // Do not overwrite DB during initial load
+                if (!isAppReady) return; 
 
                 localStorage.setItem('sd_bookings_final_v30', JSON.stringify(bookings));
                 localStorage.setItem('sd_contacts_final_v30', JSON.stringify(allContacts));
@@ -1538,7 +1494,7 @@
                         </div>
                     </section>
 
-                    {/* Selected Booking Checkout Bar */}
+                    {/* Selected Booking Checkout Bar (Centered Modal) */}
                     {selections.length > 0 && userRole === 'user' && !showPayment && (
                         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm no-print animate-in fade-in">
                             <div className="w-full max-w-md bg-white p-8 rounded-[3rem] shadow-2xl border border-gray-200 flex flex-col items-center justify-center gap-6 animate-up text-center relative">
