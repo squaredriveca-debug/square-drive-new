@@ -212,8 +212,9 @@
             const [isProcessing, setIsProcessing] = useState(false);
 
             const [isAppReady, setIsAppReady] = useState(false);
+            const lastUploadedPayload = React.useRef('');
 
-            // 1. Fetch remote data from Supabase on Initial Load
+            // 1. Fetch remote data and enable REAL-TIME cloud sync
             useEffect(() => {
                 const fetchRemoteData = async () => {
                     if (!supabase) {
@@ -224,8 +225,9 @@
                         const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
                         if (data && data.payload) {
                             const p = data.payload;
-                            if (p.bookings && Object.keys(p.bookings).length > 0) setBookings(p.bookings);
-                            if (p.allContacts && Object.keys(p.allContacts).length > 0) setAllContacts(p.allContacts);
+                            lastUploadedPayload.current = JSON.stringify(p);
+                            if (p.bookings) setBookings(p.bookings);
+                            if (p.allContacts) setAllContacts(p.allContacts);
                             if (p.systemCodes) setSystemCodes(p.systemCodes);
                             if (p.userCredits) setUserCredits(p.userCredits);
                             if (p.slotPrices) setSlotPrices(p.slotPrices);
@@ -241,9 +243,32 @@
                     setIsAppReady(true);
                 };
                 fetchRemoteData();
+
+                if (supabase) {
+                    const channel = supabase.channel('realtime_app_settings')
+                        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
+                            const p = payload.new.payload;
+                            if (p) {
+                                lastUploadedPayload.current = JSON.stringify(p);
+                                if (p.bookings) setBookings(p.bookings);
+                                if (p.allContacts) setAllContacts(p.allContacts);
+                                if (p.systemCodes) setSystemCodes(p.systemCodes);
+                                if (p.userCredits) setUserCredits(p.userCredits);
+                                if (p.slotPrices) setSlotPrices(p.slotPrices);
+                                if (p.blockedDays) setBlockedDays(p.blockedDays);
+                                if (p.packagePrices) setPackagePrices(p.packagePrices);
+                                if (p.seasonDates) setSeasonDates(p.seasonDates);
+                                if (p.slotPricesRainy) setSlotPricesRainy(p.slotPricesRainy);
+                                if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
+                            }
+                        })
+                        .subscribe();
+                    
+                    return () => { supabase.removeChannel(channel); };
+                }
             }, []);
 
-            // 2. Master Sync: Save to both LocalStorage (backup) and Supabase (cloud) whenever state changes
+            // 2. Master Sync: Save to LocalStorage AND Push to Cloud smartly
             useEffect(() => {
                 if (!isAppReady) return; 
 
@@ -263,11 +288,43 @@
                     const payload = {
                         bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy
                     };
+                    
+                    const newPayloadStr = JSON.stringify(payload);
+                    if (newPayloadStr === lastUploadedPayload.current) {
+                        return; // Stop code from uploading if the data didn't actually change
+                    }
+                    lastUploadedPayload.current = newPayloadStr;
+
                     supabase.from('app_settings').upsert({ id: 'global', payload }).then(({error}) => {
-                        if (error) console.error("Cloud save error:", error);
+                        if (error) {
+                            console.error("Cloud save error:", error);
+                        }
                     });
                 }
             }, [isAppReady, bookings, allContacts, systemCodes, userCredits, slotPrices, currentUser, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy]);
+
+            const triggerToast = (msg, type = 'success') => {
+                setToast({ msg, type });
+                setTimeout(() => setToast(null), 4000);
+            };
+
+            // NEW DIAGNOSTIC TOOL: Force Sync Button Logic
+            const forceSyncToCloud = async () => {
+                if (!supabase) return triggerToast("Database offline. Missing Keys.", "error");
+                setIsProcessing(true);
+                triggerToast("Force Syncing...", "success");
+                try {
+                    const payload = { bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy };
+                    const { error } = await supabase.from('app_settings').upsert({ id: 'global', payload });
+                    if (error) throw error;
+                    lastUploadedPayload.current = JSON.stringify(payload);
+                    triggerToast("Cloud Database Synced!", "success");
+                } catch (err) {
+                    triggerToast("Sync Failed: " + err.message, "error");
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
 
             useEffect(() => {
                 if (showPricingModal) {
@@ -290,11 +347,6 @@
 
             const activeSlotPrices = useMemo(() => isDateInRainySeason(selectedDate) ? slotPricesRainy : slotPrices, [selectedDate, slotPricesRainy, slotPrices, seasonDates]);
             const activePackagePrices = useMemo(() => isDateInRainySeason(selectedDate) ? packagePricesRainy : packagePrices, [selectedDate, packagePricesRainy, packagePrices, seasonDates]);
-
-            const triggerToast = (msg, type = 'success') => {
-                setToast({ msg, type });
-                setTimeout(() => setToast(null), 4000);
-            };
 
             const handleCopyUPI = () => {
                 const tempTextArea = document.createElement("textarea");
@@ -656,7 +708,7 @@
                         dateOfBooking: now.toLocaleDateString('en-IN'), timeOfBooking: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
                         trainingDate: selectedDate, details: selections.map(s => ({ net: s.net, slot: s.slot })),
                         paymentStatus: paymentMethod === 'upi' ? 'Verification Pending' : ((paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 'Paid via Credits' : 'Pay at Ground'),
-                        amount: finalPayable, verificationImage: screenshotPreview
+                        amount: finalPayable, verificationImage: screenshotPreview ? 'Uploaded' : null // COMPRESS DB SAVE
                     };
 
                     const next = { ...bookings };
@@ -717,7 +769,11 @@
                         setBookings(next);
                         triggerToast("Nets reserved successfully!", "success");
                     }
-                    setTicketData(newTicket); setIsProcessing(false); setIsSuccess(true); setSelections([]); setSelectedPackage(null); setShowPayment(false); setScreenshotPreview(null);
+                    
+                    // Show full ticket with image locally
+                    const ticketToRender = { ...newTicket, verificationImage: screenshotPreview };
+                    setTicketData(ticketToRender); 
+                    setIsProcessing(false); setIsSuccess(true); setSelections([]); setSelectedPackage(null); setShowPayment(false); setScreenshotPreview(null);
                 }, 1500);
             };
 
@@ -825,7 +881,7 @@
                         phone: manualPhone, 
                         priceAtBooking: price, 
                         paymentMode: manualPayment, 
-                        verificationImage: manualScreenshot,
+                        verificationImage: manualScreenshot ? 'Uploaded' : null,
                         date: date, 
                         slot: slot, 
                         net: net, 
@@ -1325,6 +1381,11 @@
                                 <Icon name={userRole === 'superadmin' ? 'crown' : userRole === 'admin' ? 'shield-alert' : 'clipboard-list'} className="w-4 h-4 text-white" />
                                 {userRole.toUpperCase()} OPERATIONS ACTIVE
                             </span>
+                            {userRole === 'superadmin' && (
+                                <button onClick={forceSyncToCloud} className="flex items-center gap-1.5 bg-green-500 text-white px-3 py-1.5 rounded hover:bg-green-400 border border-green-400 transition-colors shadow-lg">
+                                    <Icon name="upload-cloud" className="w-3.5 h-3.5" /> FORCE SYNC
+                                </button>
+                            )}
                             {userRole === 'superadmin' && (
                                 <button onClick={() => setShowRevenueAnalytics(true)} className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded hover:bg-white/30 border border-white/30 transition-colors">
                                     <Icon name="bar-chart-3" className="w-3.5 h-3.5" /> REVENUE
