@@ -5,10 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#16a34a">
     <title>Square Drive | Elite Cricket Academy Booking</title>
+    
+    <!-- 1. All Required Scripts -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         :root { --sd-green: #16a34a; --sd-dark: #111827; }
@@ -47,7 +51,8 @@
         const SUPABASE_URL = "https://iybkupbrptmnlieoliur.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5Ymt1cGJycHRtbmxpZW9saXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNjkxOTcsImV4cCI6MjA5Mjk0NTE5N30.OOSbzF36KLewkcfGxkFnsM6y9f6a5vc4KZkRlNK-lHI";
         
-        let supabase = null;
+        // Initialize Supabase immediately
+        const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
         const EMAILJS_PUBLIC_KEY = "9EVo1NqFOOmGWKndd";
         const EMAILJS_PRIVATE_KEY = "L_sKs7-2b_Jx9M1OZ9mgj";
@@ -141,38 +146,30 @@
             const [controlEndSlot, setControlEndSlot] = useState(TIME_SLOTS[TIME_SLOTS.length - 1]);
             const [controlReason, setControlReason] = useState('maintenance'); 
 
+            // Core Database States
             const [bookings, setBookings] = useState(() => JSON.parse(localStorage.getItem('sd_bookings_final_v30')) || {});
             const [allContacts, setAllContacts] = useState(() => JSON.parse(localStorage.getItem('sd_contacts_final_v30')) || {});
             const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('sd_current_user')) || null);
             const [systemCodes, setSystemCodes] = useState(() => {
                 const v31 = JSON.parse(localStorage.getItem('sd_codes_v31'));
                 if (v31) return v31;
-                const v30 = JSON.parse(localStorage.getItem('sd_codes_v30'));
-                if (v30 && typeof v30.staff === 'string') {
-                    return {
-                        staff: { code: v30.staff, phone: '9082050040', email: 'squaredriveca@gmail.com' },
-                        admin: { code: v30.admin, phone: '9920788088', email: 'squaredriveca@gmail.com' },
-                        super: { code: v30.super, phone: '9920788088', email: 'squaredriveca@gmail.com' }
-                    };
-                }
                 return {
-                    staff: { code: 'staff', phone: '9082050040', email: 'squaredriveca@gmail.com' },
-                    admin: { code: 'admin', phone: '9920788088', email: 'squaredriveca@gmail.com' },
-                    super: { code: 'super', phone: '9920788088', email: 'squaredriveca@gmail.com' }
+                    staff: { code: 'staff', phone: '9082050040', email: 'squaredriveca@gmail.com', roleType: 'staff', name: 'Ground Staff' },
+                    admin: { code: 'admin', phone: '9920788088', email: 'squaredriveca@gmail.com', roleType: 'admin', name: 'Admin' },
+                    super: { code: 'super', phone: '9920788088', email: 'squaredriveca@gmail.com', roleType: 'superadmin', name: 'Super Admin' }
                 };
             });
             
             const [slotPrices, setSlotPrices] = useState(() => JSON.parse(localStorage.getItem('sd_prices_v30')) || TIME_SLOTS.reduce((a, s) => ({ ...a, [s]: 500 }), {}));
             const [userCredits, setUserCredits] = useState(() => JSON.parse(localStorage.getItem('sd_credits_v30')) || {});
             const [blockedDays, setBlockedDays] = useState(() => JSON.parse(localStorage.getItem('sd_blocked_v30')) || {});
-
-            const [pkgView, setPkgView] = useState('weekday'); 
             const [packagePrices, setPackagePrices] = useState(() => JSON.parse(localStorage.getItem('sd_pkg_prices_v30')) || { weekday: { 10: 3750, 30: 10500, 50: 16250 }, weekend: { 10: 5000, 30: 14250, 50: 22500 } });
 
             const [seasonDates, setSeasonDates] = useState(() => JSON.parse(localStorage.getItem('sd_season_dates_v30')) || { start: '', end: '' });
             const [slotPricesRainy, setSlotPricesRainy] = useState(() => JSON.parse(localStorage.getItem('sd_prices_rainy_v30')) || TIME_SLOTS.reduce((a, s) => ({ ...a, [s]: 600 }), {}));
             const [packagePricesRainy, setPackagePricesRainy] = useState(() => JSON.parse(localStorage.getItem('sd_pkg_prices_rainy_v30')) || { weekday: { 10: 4500, 30: 12500, 50: 19500 }, weekend: { 10: 6000, 30: 17000, 50: 27000 } });
 
+            const [pkgView, setPkgView] = useState('weekday'); 
             const [showPricingModal, setShowPricingModal] = useState(false);
             const [pricingTab, setPricingTab] = useState('slots');
             const [seasonTab, setSeasonTab] = useState('regular');
@@ -214,25 +211,9 @@
 
                 const initSupabaseAndFetch = async () => {
                     try {
-                        // Dynamically load the Supabase script if it failed to load in the HTML
-                        if (!window.supabase) {
-                            await new Promise((resolve, reject) => {
-                                const script = document.createElement('script');
-                                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-                                script.onload = resolve;
-                                script.onerror = reject;
-                                document.head.appendChild(script);
-                            });
-                        }
+                        if (!supabase) throw new Error("Supabase client not found. Script missing.");
 
-                        // Build connection safely
-                        if (!supabase && window.supabase) {
-                            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                        }
-
-                        if (!supabase) throw new Error("Failed to initialize database client.");
-
-                        // Fetch real data from Cloud
+                        // 1. Fetch real data from Cloud
                         const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
                         if (data && data.payload) {
                             const p = data.payload;
@@ -249,7 +230,7 @@
                             if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
                         }
 
-                        // Activate Realtime Sync
+                        // 2. Activate Realtime Sync Listening
                         channel = supabase.channel('realtime_app_settings')
                             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
                                 const p = payload.new.payload;
@@ -284,6 +265,7 @@
             useEffect(() => {
                 if (!isAppReady) return; 
 
+                // Save locally
                 localStorage.setItem('sd_bookings_final_v30', JSON.stringify(bookings));
                 localStorage.setItem('sd_contacts_final_v30', JSON.stringify(allContacts));
                 localStorage.setItem('sd_codes_v31', JSON.stringify(systemCodes));
@@ -296,15 +278,15 @@
                 localStorage.setItem('sd_prices_rainy_v30', JSON.stringify(slotPricesRainy));
                 localStorage.setItem('sd_pkg_prices_rainy_v30', JSON.stringify(packagePricesRainy));
 
+                // Save to Cloud
                 if (supabase) {
                     const payload = {
                         bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy
                     };
                     
                     const newPayloadStr = JSON.stringify(payload);
-                    if (newPayloadStr === lastUploadedPayload.current) {
-                        return; // Stop code from uploading if the data didn't actually change
-                    }
+                    if (newPayloadStr === lastUploadedPayload.current) return; 
+                    
                     lastUploadedPayload.current = newPayloadStr;
 
                     supabase.from('app_settings').upsert({ id: 'global', payload }).then(({error}) => {
@@ -319,7 +301,7 @@
             };
 
             const forceSyncToCloud = async () => {
-                if (!supabase) return triggerToast("Database offline. Connection blocked.", "error");
+                if (!supabase) return triggerToast("Database offline. Missing Keys or Script.", "error");
                 setIsProcessing(true);
                 triggerToast("Force Syncing...", "success");
                 try {
