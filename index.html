@@ -746,8 +746,8 @@
                     return;
                 }
                 
-                if (bookings[key] && bookings[key].status !== 'occupied') {
-                    if (bookings[key].email === currentUser?.email) return; 
+                // CRITICAL FIX: If the slot exists in bookings at all, lock out regular users completely.
+                if (bookings[key]) {
                     return; 
                 }
                 
@@ -1605,15 +1605,15 @@
                                                         const activePrice = isRainySelected ? (slotPrices[`rainy_${slot}`] || slotPrices[slot] || 500) : (slotPrices[slot] || 500);
 
                                                         if (expired) btnStyle = 'bg-slate-50 text-slate-300 cursor-not-allowed';
-                                                        else if (b?.status === 'maintenance') btnStyle = 'bg-orange-500 text-white border-orange-600 shadow-lg scale-[0.98]';
-                                                        else if (b?.status === 'resting') btnStyle = 'bg-indigo-500 text-white border-indigo-600 shadow-lg scale-[0.98]';
-                                                        else if (b?.status === 'occupied') btnStyle = 'bg-emerald-500 text-white border-emerald-600 shadow-lg scale-[0.98]';
-                                                        else if (isMine) btnStyle = 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm';
+                                                        else if (b?.status === 'maintenance') btnStyle = `bg-orange-500 text-white border-orange-600 shadow-lg scale-[0.98] ${userRole === 'user' ? 'cursor-not-allowed' : ''}`;
+                                                        else if (b?.status === 'resting') btnStyle = `bg-indigo-500 text-white border-indigo-600 shadow-lg scale-[0.98] ${userRole === 'user' ? 'cursor-not-allowed' : ''}`;
+                                                        else if (b?.status === 'occupied') btnStyle = `bg-emerald-500 text-white border-emerald-600 shadow-lg scale-[0.98] ${userRole === 'user' ? 'cursor-not-allowed' : ''}`;
+                                                        else if (isMine) btnStyle = 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm cursor-not-allowed';
                                                         else if (b) btnStyle = 'bg-slate-100 text-slate-400 cursor-not-allowed';
                                                         else if (isS) btnStyle = 'bg-yellow-400 text-gray-900 border-2 border-yellow-600 scale-105 shadow-xl';
                                                         
                                                         return (
-                                                            <button key={slot} onClick={() => handleSlotClick(net, slot)} disabled={expired || (b && !isMine && userRole === 'user' && b.status !== 'occupied')}
+                                                            <button key={slot} onClick={() => handleSlotClick(net, slot)} disabled={expired || (b && userRole === 'user')}
                                                                 className={`w-full py-6 md:py-7 px-1 rounded-[1.2rem] transition-all duration-300 ${btnStyle}`}>
                                                                 <div className="flex flex-col text-center">
                                                                     <span className="text-[10px] md:text-[11px] font-black uppercase leading-none tracking-tight text-center">
@@ -1675,7 +1675,7 @@
 
                     {/* Selected Booking Checkout Bar */}
                     {selections.length > 0 && userRole === 'user' && !showPayment && (
-                        <div className="fixed bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 w-[94%] max-w-xl bg-white p-8 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl border border-gray-200 flex flex-col items-center justify-center gap-6 animate-up z-50 text-center no-print">
+                        <div className="fixed bottom-6 md:bottom-10 left-0 right-0 mx-auto w-[94%] max-w-xl bg-white p-8 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl border border-gray-200 flex flex-col items-center justify-center gap-6 animate-up z-[110] text-center no-print">
                             <div className="w-full text-center">
                                 <p className="text-[10px] font-black uppercase text-gray-400 mb-1 tracking-widest text-center">Review Selections</p>
                                 <p className="text-3xl md:text-4xl font-black text-gray-900 leading-none text-center">₹{selectionTotal}</p>
