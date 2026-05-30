@@ -47,6 +47,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
+        // --- SUPABASE CONFIGURATION ---
         const SUPABASE_URL = "https://iybkupbrptmnlieoliur.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5Ymt1cGJycHRtbmxpZW9saXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNjkxOTcsImV4cCI6MjA5Mjk0NTE5N30.OOSbzF36KLewkcfGxkFnsM6y9f6a5vc4KZkRlNK-lHI";
         const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -204,7 +205,6 @@
                             return;
                         }
 
-                        // Fallback logic for LocalStorage if cloud fails
                         const localBookings = JSON.parse(localStorage.getItem('sd_bookings_final_v30')) || {};
                         const localContacts = JSON.parse(localStorage.getItem('sd_contacts_final_v30')) || {};
                         const localCodes = JSON.parse(localStorage.getItem('sd_codes_v31')) || {
@@ -218,7 +218,6 @@
                         const localPkgPrices = JSON.parse(localStorage.getItem('sd_pkg_prices_v30')) || { weekday: { 10: 3750, 30: 10500, 50: 16250 }, weekend: { 10: 5000, 30: 14250, 50: 22500 } };
                         const localSeason = JSON.parse(localStorage.getItem('sd_season_dates_v30')) || { start: '', end: '' };
                         
-                        // Try fetching from cloud
                         const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
                         
                         if (error) {
@@ -237,28 +236,30 @@
                             setPackagePrices(p.packagePrices || localPkgPrices);
                             setSeasonDates(p.seasonDates || localSeason);
                         } else {
-                            // First time empty cloud database, push local defaults
                             const defaults = { bookings: localBookings, allContacts: localContacts, systemCodes: localCodes, userCredits: localCredits, slotPrices: localPrices, blockedDays: localBlocked, packagePrices: localPkgPrices, seasonDates: localSeason };
                             await supabase.from('app_settings').upsert({ id: 'global', payload: defaults });
                             setBookings(localBookings); setAllContacts(localContacts); setSystemCodes(localCodes); setUserCredits(localCredits); setSlotPrices(localPrices); setBlockedDays(localBlocked); setPackagePrices(localPkgPrices); setSeasonDates(localSeason);
                         }
 
-                        // Subscribe to Realtime Updates
-                        channel = supabase.channel('realtime_app_settings')
-                            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
-                                const p = payload.new.payload;
-                                if (p) {
-                                    setBookings(p.bookings || {});
-                                    setAllContacts(p.allContacts || {});
-                                    setSystemCodes(p.systemCodes || {});
-                                    setUserCredits(p.userCredits || {});
-                                    setSlotPrices(p.slotPrices || {});
-                                    setBlockedDays(p.blockedDays || {});
-                                    setPackagePrices(p.packagePrices || {});
-                                    setSeasonDates(p.seasonDates || { start: '', end: '' });
-                                }
-                            })
-                            .subscribe();
+                        try {
+                            channel = supabase.channel('realtime_app_settings')
+                                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
+                                    const p = payload.new.payload;
+                                    if (p) {
+                                        setBookings(p.bookings || {});
+                                        setAllContacts(p.allContacts || {});
+                                        setSystemCodes(p.systemCodes || {});
+                                        setUserCredits(p.userCredits || {});
+                                        setSlotPrices(p.slotPrices || {});
+                                        setBlockedDays(p.blockedDays || {});
+                                        setPackagePrices(p.packagePrices || {});
+                                        setSeasonDates(p.seasonDates || { start: '', end: '' });
+                                    }
+                                })
+                                .subscribe();
+                        } catch (wsErr) {
+                            console.warn("Live sync disabled in preview environment:", wsErr.message);
+                        }
 
                     } catch (e) {
                         console.error("Critical Cloud Error:", e);
@@ -280,7 +281,6 @@
                         await supabase.from('app_settings').upsert({ id: 'global', payload: newData });
                     } catch(e) { console.error("Sync to cloud failed:", e); }
                 }
-                // Always sync to local storage as fallback
                 localStorage.setItem('sd_bookings_final_v30', JSON.stringify(newData.bookings));
                 localStorage.setItem('sd_contacts_final_v30', JSON.stringify(newData.allContacts));
                 localStorage.setItem('sd_codes_v31', JSON.stringify(newData.systemCodes));
@@ -309,12 +309,8 @@
                 tempTextArea.style.left = "-9999px";
                 document.body.appendChild(tempTextArea);
                 tempTextArea.select();
-                try {
-                    document.execCommand("copy");
-                    triggerToast("UPI Address Copied!", "success");
-                } catch (err) {
-                    triggerToast("Could not copy UPI address.", "error");
-                }
+                try { document.execCommand("copy"); triggerToast("UPI Address Copied!", "success"); } 
+                catch (err) { triggerToast("Could not copy UPI address.", "error"); }
                 document.body.removeChild(tempTextArea);
             };
 
@@ -334,7 +330,6 @@
                 return now > slotTime;
             };
 
-            // Rainy Season Evaluator
             const isDateInRainySeason = (dateStr) => {
                 if (!seasonDates.start || !seasonDates.end) return false;
                 return dateStr >= seasonDates.start && dateStr <= seasonDates.end;
@@ -342,41 +337,31 @@
 
             const isRainySelected = useMemo(() => isDateInRainySeason(selectedDate), [selectedDate, seasonDates]);
             const isTodayRainy = useMemo(() => isDateInRainySeason(getISO(today)), [seasonDates]);
-
             const isWeekendSelected = useMemo(() => {
                 const day = new Date(selectedDate).getDay();
                 return day === 0 || day === 6; 
             }, [selectedDate]);
 
-            // Revenue Tools
             const [revStartDateStr, setRevStartDateStr] = useState(getISO(today));
             const [revEndDateStr, setRevEndDateStr] = useState(getISO(today));
 
             const revenueStats = useMemo(() => {
-                let todayRev = 0;
-                let selectedDateRev = 0;
-                let monthRev = 0;
-                let annualRev = 0;
+                let todayRev = 0; let selectedDateRev = 0; let monthRev = 0; let annualRev = 0;
                 const selectedDateBreakdown = [];
-
                 const revYear = revStartDateStr.substring(0, 4);
                 const revMonth = revStartDateStr.substring(0, 7);
                 const actualTodayStr = getISO(new Date());
 
                 Object.entries(bookings).forEach(([key, b]) => {
                     if (!b || !b.priceAtBooking) return;
-                    
                     let itemDateStr = "";
                     if (b.type === 'package') {
                         const p = b.date.split('/');
                         if (p.length === 3) itemDateStr = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-                        else itemDateStr = b.bookingDate ? b.bookingDate.split('/').reverse().join('-') : ""; // fallback
-                    } else {
-                        itemDateStr = b.date;
-                    }
+                        else itemDateStr = b.bookingDate ? b.bookingDate.split('/').reverse().join('-') : ""; 
+                    } else { itemDateStr = b.date; }
 
                     if (!itemDateStr) return;
-
                     const amt = b.priceAtBooking || 0;
 
                     if (itemDateStr === actualTodayStr) todayRev += amt;
@@ -389,11 +374,9 @@
                 });
 
                 selectedDateBreakdown.sort((a,b) => a.parsedDate.localeCompare(b.parsedDate));
-
                 return { todayRev, selectedDateRev, monthRev, annualRev, selectedDateBreakdown };
             }, [bookings, revStartDateStr, revEndDateStr]);
             
-            // Manifest
             const dayBookingsList = useMemo(() => {
                 return Object.entries(bookings)
                     .filter(([key, b]) => key.startsWith(selectedDate) && (b.type === 'user' || b.type === 'system'))
@@ -408,7 +391,6 @@
                     .sort((a, b) => b.bookingDate?.localeCompare(a.bookingDate) || 0);
             }, [bookings]);
 
-            // Financials
             const selectionTotal = useMemo(() => selections.reduce((t, s) => t + (slotPrices[s.slot] || 500), 0), [selections, slotPrices]);
             const finalPayable = selectedPackage ? selectedPackage.price : selectionTotal;
 
@@ -416,14 +398,11 @@
                 const defaults = { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
                 if (!currentUser) return defaults;
                 const raw = userCredits[currentUser.email] || {};
-                
-                const weekday = raw.weekday || 0;
-                const weekend = raw.weekend || 0;
+                const weekday = raw.weekday || 0; const weekend = raw.weekend || 0;
                 const weekdayBought = raw.weekdayBought !== undefined ? raw.weekdayBought : weekday;
                 const weekendBought = raw.weekendBought !== undefined ? raw.weekendBought : weekend;
                 const weekdayUsed = raw.weekdayUsed !== undefined ? raw.weekdayUsed : 0;
                 const weekendUsed = raw.weekendUsed !== undefined ? raw.weekendUsed : 0;
-                
                 return { weekday, weekend, weekdayBought, weekendBought, weekdayUsed, weekendUsed };
             }, [userCredits, currentUser]);
 
@@ -441,32 +420,25 @@
                     .filter(([key, b]) => b.phone === phone || b.email === currentUser.email)
                     .map(([key, b]) => ({ ...b, key }))
                     .sort((a, b) => {
-                        // Precise Chronological Date + Time parsing
                         const parseDateTime = (dateStr, timeStr) => {
                             if (!dateStr || !timeStr) return 0;
                             const [day, month, year] = dateStr.split(/[-/]/);
                             if (!day || !month || !year) return 0;
-                            
                             const [time, modifier] = timeStr.split(' ');
                             if (!time || !modifier) return 0;
                             let [hours, minutes] = time.split(':');
                             if (!hours || !minutes) return 0;
-                            
                             hours = parseInt(hours, 10);
                             if (hours === 12 && modifier.toUpperCase() === 'AM') hours = 0;
                             else if (modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
-                            
                             return new Date(year, month - 1, day, hours, parseInt(minutes, 10)).getTime();
                         };
-
                         const timeA = parseDateTime(a.bookingDate || a.date, a.bookingTime || a.time);
                         const timeB = parseDateTime(b.bookingDate || b.date, b.bookingTime || b.time);
-                        
-                        return timeB - timeA; // Descending (Newest to Oldest)
+                        return timeB - timeA; 
                     });
             }, [bookings, currentUser]);
 
-            // Contacts
             const cleanManualPhone = getCleanPhone(manualPhone);
             const matchedManualUser = useMemo(() => {
                 if (!cleanManualPhone || cleanManualPhone.length < 5) return null;
@@ -488,28 +460,108 @@
 
             const filteredContacts = useMemo(() => {
                 if (contactFilter === 'system') return [];
-                return Object.entries(allContacts).filter(([phone, user]) => 
-                    contactFilter === 'all' || user.type === contactFilter
-                );
+                return Object.entries(allContacts).filter(([phone, user]) => contactFilter === 'all' || user.type === contactFilter);
             }, [allContacts, contactFilter]);
 
             useEffect(() => {
-                if (manualPayment === 'credits' && !canUseManualCredits) {
-                    setManualPayment('venue');
-                }
+                if (manualPayment === 'credits' && !canUseManualCredits) setManualPayment('venue');
             }, [canUseManualCredits, manualPayment]);
 
             const handleDateChange = (newDate) => { if(!newDate) return; setSelectedDate(newDate); setSelections([]); };
 
+            // Universal Deletion Logic (Handles Credit Refunds/Revokes Properly)
+            const deleteBookingRecord = async (key, item) => {
+                const nextBookings = { ...bookings };
+                let nextCredits = { ...userCredits };
+                
+                if (!item) item = nextBookings[key];
+                if (!item) return;
+
+                // 1. Package revoking
+                if (item.type === 'package' && item.paymentStatus === 'verified') {
+                    const tier = item.packageType || (item.title.toLowerCase().includes('weekday') ? 'weekday' : 'weekend');
+                    const sessions = item.sessions || parseInt(item.title, 10);
+                    const activeKey = item.email || getCleanPhone(item.phone);
+                    
+                    if (nextCredits[activeKey]) {
+                        nextCredits[activeKey] = { ...nextCredits[activeKey] };
+                        nextCredits[activeKey][tier] = Math.max(0, (nextCredits[activeKey][tier] || 0) - sessions);
+                        nextCredits[activeKey][`${tier}Bought`] = Math.max(0, (nextCredits[activeKey][`${tier}Bought`] || 0) - sessions);
+                    }
+                } 
+                // 2. Slot refunding
+                else if (item.type === 'user' && (item.paymentMode === 'weekday_credits' || item.paymentMode === 'weekend_credits' || item.paymentMode === 'credits')) {
+                    const activeKey = item.email || getCleanPhone(item.phone);
+                    if (nextCredits[activeKey]) {
+                        nextCredits[activeKey] = { ...nextCredits[activeKey] };
+                        const isWE = new Date(item.date).getDay() === 0 || new Date(item.date).getDay() === 6;
+                        if (item.paymentMode === 'weekend_credits' || (item.paymentMode === 'credits' && isWE)) {
+                            nextCredits[activeKey].weekend = (nextCredits[activeKey].weekend || 0) + 1;
+                            nextCredits[activeKey].weekendUsed = Math.max(0, (nextCredits[activeKey].weekendUsed || 0) - 1);
+                        } else {
+                            nextCredits[activeKey].weekday = (nextCredits[activeKey].weekday || 0) + 1;
+                            nextCredits[activeKey].weekdayUsed = Math.max(0, (nextCredits[activeKey].weekdayUsed || 0) - 1);
+                        }
+                    }
+                }
+
+                delete nextBookings[key];
+                setBookings(nextBookings);
+                setUserCredits(nextCredits);
+                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                triggerToast("Record deleted & credits synced.", "success");
+            };
+
+            const adjustCredits = (user, type, amount) => {
+                const activeKey = user.email || getCleanPhone(user.phone);
+                const nextCredits = { ...userCredits };
+                if (!nextCredits[activeKey]) nextCredits[activeKey] = { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
+                nextCredits[activeKey] = { ...nextCredits[activeKey] };
+                
+                const current = nextCredits[activeKey][type] || 0;
+                const nextVal = Math.max(0, current + amount);
+                nextCredits[activeKey][type] = nextVal;
+                
+                if (amount > 0) nextCredits[activeKey][`${type}Bought`] = (nextCredits[activeKey][`${type}Bought`] || 0) + amount;
+                else nextCredits[activeKey][`${type}Bought`] = Math.max(0, (nextCredits[activeKey][`${type}Bought`] || 0) - 1);
+
+                setUserCredits(nextCredits);
+                syncToCloud({ bookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                triggerToast(`${type === 'weekday' ? 'Weekday' : 'Weekend'} credits updated.`, "success");
+            };
+
+            // Fortified User Credits Reset (Wipes both email & phone instances)
+            const resetUserCredits = (user) => {
+                setConfirmModal({
+                    message: `Are you sure you want to completely wipe all usage and balances to zero for ${user.name}? This cannot be undone.`,
+                    onConfirm: async () => {
+                        const nextCredits = { ...userCredits };
+                        const eKey = user.email;
+                        const pKey = getCleanPhone(user.phone);
+
+                        const wipeObj = { 
+                            weekday: 0, 
+                            weekend: 0, 
+                            weekdayBought: 0, 
+                            weekendBought: 0, 
+                            weekdayUsed: 0, 
+                            weekendUsed: 0 
+                        };
+
+                        if (eKey) nextCredits[eKey] = wipeObj;
+                        if (pKey) nextCredits[pKey] = wipeObj;
+                        
+                        setUserCredits(nextCredits);
+                        await syncToCloud({ bookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                        triggerToast("Usage and balances wiped perfectly to zero.", "success");
+                    }
+                });
+            };
+
             const applyFacilityControl = (action) => {
                 const getDatesInRange = (start, end) => {
-                    const dateArr = [];
-                    let curr = new Date(start);
-                    const endDate = new Date(end);
-                    while (curr <= endDate) {
-                        dateArr.push(getISO(curr));
-                        curr.setDate(curr.getDate() + 1);
-                    }
+                    const dateArr = []; let curr = new Date(start); const endDate = new Date(end);
+                    while (curr <= endDate) { dateArr.push(getISO(curr)); curr.setDate(curr.getDate() + 1); }
                     return dateArr;
                 };
 
@@ -519,15 +571,11 @@
                 if (controlScope === 'facility' && controlDuration === 'fullday') {
                     setBlockedDays(prev => {
                         const next = { ...prev };
-                        targetDates.forEach(d => {
-                            if (action === 'block') next[d] = true;
-                            else delete next[d];
-                        });
+                        targetDates.forEach(d => { if (action === 'block') next[d] = true; else delete next[d]; });
                         syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays: next, packagePrices, seasonDates });
                         return next;
                     });
-                    setSelections([]); 
-                    setShowFacilityControls(false);
+                    setSelections([]); setShowFacilityControls(false);
                     triggerToast(`Facility completely ${action === 'block' ? 'closed' : 'reopened'} for selected dates.`, "success");
                     return;
                 }
@@ -552,25 +600,19 @@
                                 const key = `${d}-${net}-${slot}`;
                                 if (action === 'block') {
                                     next[key] = { 
-                                        type: 'system', 
-                                        status: controlReason, 
+                                        type: 'system', status: controlReason, 
                                         user: controlReason === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
                                         date: d, slot: slot, net: net, 
                                         bookingDate: new Date().toLocaleDateString('en-IN'),
                                         bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                                     };
-                                } else {
-                                    if (next[key]?.status === 'maintenance' || next[key]?.status === 'resting') {
-                                        delete next[key];
-                                    }
-                                }
+                                } else { if (next[key]?.status === 'maintenance' || next[key]?.status === 'resting') delete next[key]; }
                             });
                         });
                     });
                     syncToCloud({ bookings: next, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                     return next;
                 });
-
                 triggerToast(`${controlReason === 'resting' ? 'Resting hours' : 'Maintenance'} blocks ${action === 'block' ? 'applied' : 'cleared'} successfully across selected dates.`, "success");
                 setShowFacilityControls(false);
             };
@@ -592,19 +634,15 @@
                 const existing = allContacts[cleanPhone];
                 if (existing) {
                     if (existing.password === userLoginPassword) { 
-                        setCurrentUser(existing); 
-                        triggerToast("Logged in successfully!", "success");
-                        setShowUserLogin(false); 
+                        setCurrentUser(existing); triggerToast("Logged in successfully!", "success"); setShowUserLogin(false); 
                     }
                     else triggerToast("Invalid Password. Identity rejected.", "error");
                 } else {
                     const newUser = { name: userLoginName, email: userLoginEmail, phone: cleanPhone, type: userLoginType, password: userLoginPassword };
                     const nextContacts = { ...allContacts, [cleanPhone]: newUser };
-                    setAllContacts(nextContacts);
-                    setCurrentUser(newUser); 
+                    setAllContacts(nextContacts); setCurrentUser(newUser); 
                     syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
-                    triggerToast("New profile registered & logged in!", "success");
-                    setShowUserLogin(false);
+                    triggerToast("New profile registered & logged in!", "success"); setShowUserLogin(false);
                 }
             };
 
@@ -626,24 +664,16 @@
                             })
                         });
                         if (res.ok) { 
-                            setExpectedResetOtp(otp); 
-                            setIsResetOtpSent(true); 
-                            triggerToast("Recovery OTP sent to your registered email!", "success");
+                            setExpectedResetOtp(otp); setIsResetOtpSent(true); triggerToast("Recovery OTP sent to your registered email!", "success");
                         }
-                    } catch (err) { 
-                        triggerToast("Email gateway connection error.", "error"); 
-                    } finally { 
-                        setIsSendingResetOtp(false); 
-                    }
+                    } catch (err) { triggerToast("Email gateway connection error.", "error"); } finally { setIsSendingResetOtp(false); }
                 } else {
                     if (resetOtp === expectedResetOtp || resetOtp === "123456") {
                         const nextContacts = { ...allContacts, [cleanPhone]: { ...allContacts[cleanPhone], password: newPassword } };
                         setAllContacts(nextContacts);
                         syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                         triggerToast("Password adjusted successfully!", "success"); 
-                        setIsForgotPassword(false); 
-                        setIsResetOtpSent(false); 
-                        setLoginStep('form');
+                        setIsForgotPassword(false); setIsResetOtpSent(false); setLoginStep('form');
                     } else triggerToast("Invalid OTP code matching failed.", "error");
                 }
             };
@@ -651,17 +681,11 @@
             const handleStaffLogin = (e) => {
                 e.preventDefault();
                 const pass = staffLoginPass.toLowerCase();
-                
                 const matchedKey = Object.keys(systemCodes).find(k => systemCodes[k].code === pass);
                 if (matchedKey) {
                     const role = systemCodes[matchedKey].roleType || (matchedKey.startsWith('super') ? 'superadmin' : matchedKey.startsWith('admin') ? 'admin' : 'staff');
-                    setUserRole(role);
-                    triggerToast(`Welcome ${role.toUpperCase()}!`, "success");
-                    setShowStaffLogin(false); 
-                    setStaffLoginPass('');
-                } else {
-                    triggerToast("Invalid Operation Authorization Code.", "error");
-                }
+                    setUserRole(role); triggerToast(`Welcome ${role.toUpperCase()}!`, "success"); setShowStaffLogin(false); setStaffLoginPass('');
+                } else { triggerToast("Invalid Operation Authorization Code.", "error"); }
             };
 
             const handleStaffForgotPassword = async (e) => {
@@ -671,13 +695,10 @@
                 if (!isStaffOtpSent) {
                     const matchedKey = Object.keys(systemCodes).find(k => getCleanPhone(systemCodes[k].phone) === cleanPhone);
                     if (!matchedKey) return triggerToast("Mobile number does not match any system records.", "error");
-                    
                     const targetRoleData = systemCodes[matchedKey];
                     if (!targetRoleData.email) return triggerToast("No recovery email configured for this profile.", "error");
                     
-                    setStaffForgotRole(matchedKey);
-                    setIsSendingStaffOtp(true);
-                    
+                    setStaffForgotRole(matchedKey); setIsSendingStaffOtp(true);
                     const otp = Math.floor(100000 + Math.random() * 900000).toString();
                     try {
                         const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
@@ -689,32 +710,17 @@
                             })
                         });
                         if (res.ok) { 
-                            setExpectedStaffOtp(otp); 
-                            setIsStaffOtpSent(true); 
-                            triggerToast("Recovery OTP sent to registered admin email!", "success");
-                        } else {
-                            triggerToast("Failed to send email.", "error");
-                        }
-                    } catch (err) { 
-                        triggerToast("Email gateway connection error.", "error"); 
-                    } finally { 
-                        setIsSendingStaffOtp(false); 
-                    }
+                            setExpectedStaffOtp(otp); setIsStaffOtpSent(true); triggerToast("Recovery OTP sent to registered admin email!", "success");
+                        } else { triggerToast("Failed to send email.", "error"); }
+                    } catch (err) { triggerToast("Email gateway connection error.", "error"); } finally { setIsSendingStaffOtp(false); }
                 } else {
                     if (staffResetOtp === expectedStaffOtp || staffResetOtp === "123456") {
                         const nextCodes = { ...systemCodes, [staffForgotRole]: { ...systemCodes[staffForgotRole], code: newStaffCode.toLowerCase() } };
                         setSystemCodes(nextCodes);
                         syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                         triggerToast("Access Token adjusted successfully!", "success"); 
-                        setIsStaffForgot(false); 
-                        setIsStaffOtpSent(false);
-                        setStaffForgotPhone('');
-                        setStaffResetOtp('');
-                        setNewStaffCode('');
-                        setShowStaffLogin(false);
-                    } else {
-                        triggerToast("Invalid OTP code.", "error");
-                    }
+                        setIsStaffForgot(false); setIsStaffOtpSent(false); setStaffForgotPhone(''); setStaffResetOtp(''); setNewStaffCode(''); setShowStaffLogin(false);
+                    } else { triggerToast("Invalid OTP code.", "error"); }
                 }
             };
 
@@ -730,26 +736,16 @@
                         
                         setConfirmModal({
                             message: msg,
-                            onConfirm: () => {
-                                const n = { ...bookings }; 
-                                delete n[key]; 
-                                setBookings(n);
-                                syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
-                                triggerToast((bookings[key]?.status === 'maintenance' || bookings[key]?.status === 'resting') ? "Block cleared." : "Lane entry cleared.", "success");
-                            }
+                            onConfirm: () => { deleteBookingRecord(key, bookings[key]); }
                         });
                     } else {
                         setManualName(''); setManualPhone(''); setManualPayment('venue'); setManualScreenshot(null);
-                        setManualEntryType('booking');
-                        setManualEntryModal({ net, slot, date: selectedDate });
+                        setManualEntryType('booking'); setManualEntryModal({ net, slot, date: selectedDate });
                     }
                     return;
                 }
                 
-                // CRITICAL FIX: If the slot exists in bookings at all, lock out regular users completely.
-                if (bookings[key]) {
-                    return; 
-                }
+                if (bookings[key]) return; 
                 
                 const isS = selections.some(s => s.net === net && s.slot === slot);
                 if (isS) setSelections(selections.filter(s => !(s.net === net && s.slot === slot)));
@@ -777,7 +773,6 @@
                 b.verifiedBy = isVerifying ? currentUser?.name || 'System Admin' : null;
                 b.verifiedByRole = isVerifying ? userRole : null;
 
-                // Handle Package Quarantined Credits
                 if (b.type === 'package') {
                     const tier = b.packageType || (b.title.toLowerCase().includes('weekday') ? 'weekday' : 'weekend');
                     const sessions = b.sessions || parseInt(b.title, 10);
@@ -810,7 +805,7 @@
                     message: item.type === 'package' ? "Revert membership payment to Pending and revoke credits?" : "Revert lane payment to Pending?",
                     onConfirm: async () => {
                         const nextBookings = { ...bookings };
-                        const nextCredits = { ...userCredits };
+                        let nextCredits = { ...userCredits };
 
                         if (item.type === 'package' && item.paymentStatus === 'verified') {
                             const tier = item.packageType || (item.title.toLowerCase().includes('weekday') ? 'weekday' : 'weekend');
@@ -818,6 +813,7 @@
                             const activeKey = item.email || getCleanPhone(item.phone);
                             
                             if (nextCredits[activeKey]) {
+                                nextCredits[activeKey] = { ...nextCredits[activeKey] };
                                 nextCredits[activeKey][tier] = Math.max(0, (nextCredits[activeKey][tier] || 0) - sessions);
                                 nextCredits[activeKey][`${tier}Bought`] = Math.max(0, (nextCredits[activeKey][`${tier}Bought`] || 0) - sessions);
                             }
@@ -830,37 +826,9 @@
                         }
 
                         setBookings(nextBookings);
-                        if(item.type === 'package') setUserCredits(nextCredits);
+                        setUserCredits(nextCredits);
                         await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                         triggerToast("Payment status reverted.", "success");
-                    }
-                });
-            };
-
-            const deleteRevenueRecord = (key, item) => {
-                setConfirmModal({
-                    message: "Permanently delete this transaction? (If it's a verified package, credits will be revoked).",
-                    onConfirm: async () => {
-                        const nextBookings = { ...bookings };
-                        const nextCredits = { ...userCredits };
-
-                        if (item.type === 'package' && item.paymentStatus === 'verified') {
-                            const tier = item.packageType || (item.title.toLowerCase().includes('weekday') ? 'weekday' : 'weekend');
-                            const sessions = item.sessions || parseInt(item.title, 10);
-                            const activeKey = item.email || getCleanPhone(item.phone);
-                            
-                            if (nextCredits[activeKey]) {
-                                nextCredits[activeKey][tier] = Math.max(0, (nextCredits[activeKey][tier] || 0) - sessions);
-                                nextCredits[activeKey][`${tier}Bought`] = Math.max(0, (nextCredits[activeKey][`${tier}Bought`] || 0) - sessions);
-                            }
-                        }
-
-                        delete nextBookings[key];
-
-                        setBookings(nextBookings);
-                        if(item.type === 'package') setUserCredits(nextCredits);
-                        await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
-                        triggerToast("Record deleted successfully.", "success");
                     }
                 });
             };
@@ -868,9 +836,8 @@
             const handleScreenshotUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    // Limit file size or just compress to a flag to prevent DB overflow if needed
                     const reader = new FileReader();
-                    reader.onloadend = () => setScreenshotPreview(reader.result); // Base64 for the ticket
+                    reader.onloadend = () => setScreenshotPreview(reader.result);
                     reader.readAsDataURL(file);
                 }
             };
@@ -895,8 +862,6 @@
 
                     if (selectedPackage) {
                         const tier = selectedPackage.type; 
-                        
-                        // Quarantined Credit Logic for Packages
                         const isVerified = (paymentMethod !== 'upi' && paymentMethod !== 'venue');
                         
                         if (isVerified) {
@@ -910,22 +875,13 @@
 
                         const pkgKey = `pkg-${currentUser.email}-${Date.now()}`;
                         nextBookings[pkgKey] = {
-                            type: 'package',
-                            title: selectedPackage.title,
-                            priceAtBooking: selectedPackage.price,
-                            paymentMode: paymentMethod,
-                            paymentStatus: isVerified ? 'verified' : 'pending',
-                            email: currentUser.email,
-                            phone: cleanPhone,
-                            sessions: selectedPackage.sessions,
-                            packageType: tier,
-                            date: now.toLocaleDateString('en-IN'),
-                            time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                            bookingDate: now.toLocaleDateString('en-IN'),
-                            bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                            type: 'package', title: selectedPackage.title, priceAtBooking: selectedPackage.price,
+                            paymentMode: paymentMethod, paymentStatus: isVerified ? 'verified' : 'pending',
+                            email: currentUser.email, phone: cleanPhone, sessions: selectedPackage.sessions, packageType: tier,
+                            date: now.toLocaleDateString('en-IN'), time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                            bookingDate: now.toLocaleDateString('en-IN'), bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                         };
                     } else {
-                        // Slot Booking Logic
                         if (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') {
                             const uo = { ...nextCredits[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
                             let rem = selections.length;
@@ -949,17 +905,14 @@
                                 priceAtBooking: isVerified ? 0 : (slotPrices[s.slot] || 500), 
                                 paymentMode: paymentMethod, paymentStatus: isVerified ? 'verified' : 'pending',
                                 date: selectedDate, slot: s.slot, net: s.net, status: null,
-                                // Avoid huge payload in DB, replace base64 with flag
                                 verificationImage: screenshotPreview ? "UPLOADED" : null,
-                                bookingDate: now.toLocaleDateString('en-IN'),
-                                bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                                bookingDate: now.toLocaleDateString('en-IN'), bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                             }; 
                         });
                         triggerToast("Nets reserved successfully!", "success");
                     }
                     
-                    setBookings(nextBookings);
-                    setUserCredits(nextCredits);
+                    setBookings(nextBookings); setUserCredits(nextCredits);
                     await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                     
                     setTicketData(newTicket); setIsProcessing(false); setIsSuccess(true); setSelections([]); setSelectedPackage(null); setShowPayment(false); setScreenshotPreview(null);
@@ -975,8 +928,7 @@
                         type: 'system', status: manualEntryType,
                         user: manualEntryType === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
                         date: date, slot: slot, net: net, 
-                        bookingDate: new Date().toLocaleDateString('en-IN'),
-                        bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                        bookingDate: new Date().toLocaleDateString('en-IN'), bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                     }};
                     setBookings(next);
                     await syncToCloud({ bookings: next, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
@@ -993,8 +945,7 @@
                     paymentMode: manualPayment, paymentStatus: isVerified ? 'verified' : 'pending',
                     verificationImage: manualScreenshot ? "UPLOADED" : null,
                     date: date, slot: slot, net: net, status: null,
-                    bookingDate: new Date().toLocaleDateString('en-IN'),
-                    bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                    bookingDate: new Date().toLocaleDateString('en-IN'), bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                 }};
 
                 let nextCredits = { ...userCredits };
@@ -1003,8 +954,7 @@
                     let match = allContacts[cleanPhone] || Object.values(allContacts).find(c => c.phone && (c.phone.endsWith(cleanPhone) || cleanPhone.endsWith(c.phone)));
                     if (match) {
                         const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
-                        const eKey = match.email;
-                        const pKey = getCleanPhone(match.phone);
+                        const eKey = match.email; const pKey = getCleanPhone(match.phone);
                         const activeKey = (eKey && nextCredits[eKey]) ? eKey : (pKey && nextCredits[pKey] ? pKey : (eKey || pKey));
                         
                         const uo = { ...nextCredits[activeKey] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
@@ -1021,17 +971,12 @@
                 let nextContacts = { ...allContacts };
                 const cleanManualPhone = getCleanPhone(manualPhone);
                 let checkMatch = nextContacts[cleanManualPhone] || Object.values(nextContacts).find(c => c.phone && (c.phone.endsWith(cleanManualPhone) || cleanManualPhone.endsWith(c.phone)));
-                if (!checkMatch) {
-                    nextContacts[cleanManualPhone] = { name: manualName, phone: cleanManualPhone, type: 'guest', email: '' };
-                }
+                if (!checkMatch) { nextContacts[cleanManualPhone] = { name: manualName, phone: cleanManualPhone, type: 'guest', email: '' }; }
 
-                setBookings(nextBookings);
-                setUserCredits(nextCredits);
-                setAllContacts(nextContacts);
+                setBookings(nextBookings); setUserCredits(nextCredits); setAllContacts(nextContacts);
                 await syncToCloud({ bookings: nextBookings, allContacts: nextContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
 
-                triggerToast("Manual booking added successfully!", "success");
-                setManualEntryModal(null);
+                triggerToast("Manual booking added successfully!", "success"); setManualEntryModal(null);
             };
 
             if (!isAppReady) {
@@ -1045,7 +990,6 @@
 
             return (
                 <div className="min-h-screen flex flex-col text-left">
-                    {/* Toast Notification */}
                     {toast && (
                         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[500] px-6 py-4 rounded-2xl shadow-xl font-bold flex items-center gap-3 animate-up text-white no-print ${toast.type === 'error' ? 'bg-red-600' : 'bg-slate-900'}`}>
                             {toast.type === 'error' ? <Icon name="x" className="w-5 h-5"/> : <Icon name="check-circle-2" className="w-5 h-5"/>}
@@ -1053,7 +997,6 @@
                         </div>
                     )}
 
-                    {/* Universal Confirmation Modal */}
                     {confirmModal && (
                         <div className="fixed inset-0 z-[800] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm no-print">
                             <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-up border text-center">
@@ -1070,7 +1013,6 @@
                         </div>
                     )}
 
-                    {/* Facility Operations & Maintenance Bulk Modal */}
                     {showFacilityControls && (
                         <div className="fixed inset-0 z-[750] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1083,7 +1025,6 @@
                                 </div>
 
                                 <div className="p-6 md:p-8 overflow-y-auto no-scrollbar flex-1 space-y-6">
-                                    {/* Date Range Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">1. Select Date Range</p>
                                         <div className="flex gap-4">
@@ -1098,7 +1039,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Scope Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">2. Select Target Area</p>
                                         <div className="flex bg-gray-100 p-1.5 rounded-2xl">
@@ -1107,7 +1047,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Nets Selection (If Scope is Nets) */}
                                     {controlScope === 'nets' && (
                                         <div className="animate-in fade-in slide-in-from-top-2">
                                             <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">Select Lanes to Block</p>
@@ -1127,7 +1066,6 @@
                                         </div>
                                     )}
 
-                                    {/* Duration Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">3. Select Duration</p>
                                         <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1159,7 +1097,6 @@
                                         )}
                                     </div>
 
-                                    {/* Reason Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">4. Select Reason</p>
                                         <div className="flex bg-gray-100 p-1.5 rounded-2xl">
@@ -1188,7 +1125,6 @@
                         </div>
                     )}
 
-                    {/* Super Admin Edit Password Modal */}
                     {editPasswordModal && (
                         <div className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                             <form onSubmit={(e) => {
@@ -1266,7 +1202,6 @@
                         </div>
                     )}
 
-                    {/* Admin Pricing Editor Modal (Includes Rainy Season Panel) */}
                     {showPricingModal && (userRole === 'admin' || userRole === 'superadmin') && (
                         <div className="fixed inset-0 z-[750] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1382,7 +1317,6 @@
                         </div>
                     )}
 
-                    {/* Manual Entry Booking Modal for Admin/Staff */}
                     {manualEntryModal && (
                         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1926,6 +1860,7 @@
                                                 <p className="text-center py-8 text-gray-400 font-bold text-xs uppercase tracking-widest">No revenue generated in this range</p>
                                             ) : (
                                                 <React.Fragment>
+                                                    {/* Screen View (Cards) */}
                                                     <div className="space-y-3 print:hidden">
                                                         {revenueStats.selectedDateBreakdown.map((item, idx) => (
                                                             <div key={idx} className="print-break-avoid flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-2xl bg-gray-50/50 gap-2 hover:bg-gray-50 transition-colors">
@@ -1943,7 +1878,7 @@
                                                                         <span className="text-sm font-black text-slate-800 block">₹{item.priceAtBooking}</span>
                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{item.user || item.email || item.phone}</span>
                                                                         {item.paymentStatus === 'verified' && item.verifiedBy && (
-                                                                            <span className="text-[8px] font-black text-emerald-600 uppercase block mt-1 text-left sm:text-right">Verified by: {item.verifiedBy}</span>
+                                                                            <span className="text-[8px] font-black text-emerald-600 uppercase block mt-1 text-left sm:text-right">Verified by: {item.verifiedBy} ({item.verifiedByRole})</span>
                                                                         )}
                                                                         {(item.paymentMode === 'upi' || item.paymentMode === 'venue') && item.paymentStatus !== 'verified' && (
                                                                             <span className="text-[8px] font-black text-yellow-600 uppercase block mt-1 text-left sm:text-right">Payment Pending</span>
@@ -1956,7 +1891,12 @@
                                                                                     Un-Verify
                                                                                 </button>
                                                                             )}
-                                                                            <button onClick={() => deleteRevenueRecord(item.key, item)} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors shadow-sm">
+                                                                            <button onClick={() => {
+                                                                                setConfirmModal({
+                                                                                    message: "Permanently delete this transaction? (If it's a verified package, credits will be revoked).",
+                                                                                    onConfirm: () => deleteBookingRecord(item.key, item)
+                                                                                });
+                                                                            }} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors shadow-sm">
                                                                                 Delete
                                                                             </button>
                                                                         </div>
@@ -1966,6 +1906,7 @@
                                                         ))}
                                                     </div>
                                                     
+                                                    {/* Print View (Simple List/Table) */}
                                                     <div className="hidden print:block w-full mt-4">
                                                         <table className="w-full text-left text-xs border-collapse">
                                                             <thead>
@@ -1974,7 +1915,6 @@
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px]">Description</th>
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px]">Contact Info</th>
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px]">Method</th>
-                                                                    <th className="py-2 font-black uppercase tracking-widest text-[10px]">Status</th>
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px] text-right">Amount</th>
                                                                 </tr>
                                                             </thead>
@@ -1994,9 +1934,6 @@
                                                                             <span className="text-[9px] text-gray-500 block mt-0.5">{item.email || item.phone}</span>
                                                                         </td>
                                                                         <td className="py-3 font-bold text-gray-600 uppercase">{item.paymentMode}</td>
-                                                                        <td className="py-3 font-bold text-gray-600 uppercase">
-                                                                            {item.paymentStatus === 'verified' ? `Verified by ${item.verifiedBy || 'Admin'}` : 'Pending'}
-                                                                        </td>
                                                                         <td className="py-3 font-black text-gray-900 text-right">₹{item.priceAtBooking}</td>
                                                                     </tr>
                                                                 ))}
@@ -2088,8 +2025,7 @@
                                                                             <button onClick={() => setConfirmModal({
                                                                                 message: `Revoke all access for ${dispName}?`,
                                                                                 onConfirm: () => {
-                                                                                    const n = {...systemCodes}; delete n[role]; setSystemCodes(n);
-                                                                                    syncToCloud({ bookings, allContacts, systemCodes: n, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                                                                                    setSystemCodes(prev => { const n = {...prev}; delete n[role]; return n; });
                                                                                     triggerToast("System user removed.", "success");
                                                                                 }
                                                                             })} className="text-[9px] font-black uppercase text-red-600 hover:text-red-800 tracking-widest bg-red-50 px-3 py-1.5 rounded-lg no-print transition-colors hover:bg-red-100">Delete</button>
@@ -2103,6 +2039,7 @@
                                                 })}
                                             </div>
                                             
+                                            {/* Table View specifically tailored for Printing */}
                                             <div className="hidden print:block w-full mt-4">
                                                 <table className="w-full text-left text-xs border-collapse">
                                                     <thead>
@@ -2170,13 +2107,28 @@
                                                                 <div className="flex gap-2">
                                                                     <div className="flex-1 bg-green-50 border border-green-100 rounded-lg p-2 text-center">
                                                                         <span className="block text-[8px] font-black text-green-600 uppercase tracking-widest">WD Credits</span>
-                                                                        <span className="block text-sm font-black text-green-900">{bal.weekday || 0}</span>
+                                                                        <div className="flex items-center justify-center gap-2 mt-1">
+                                                                            {userRole === 'superadmin' && <button onClick={() => adjustCredits(user, 'weekday', -1)} className="w-5 h-5 flex items-center justify-center bg-white border border-green-200 text-green-600 rounded hover:bg-green-600 hover:text-white transition-colors">-</button>}
+                                                                            <span className="block text-sm font-black text-green-900">{bal.weekday || 0}</span>
+                                                                            {userRole === 'superadmin' && <button onClick={() => adjustCredits(user, 'weekday', 1)} className="w-5 h-5 flex items-center justify-center bg-white border border-green-200 text-green-600 rounded hover:bg-green-600 hover:text-white transition-colors">+</button>}
+                                                                        </div>
                                                                     </div>
                                                                     <div className="flex-1 bg-purple-50 border border-purple-100 rounded-lg p-2 text-center">
                                                                         <span className="block text-[8px] font-black text-purple-600 uppercase tracking-widest">WE Credits</span>
-                                                                        <span className="block text-sm font-black text-purple-900">{bal.weekend || 0}</span>
+                                                                        <div className="flex items-center justify-center gap-2 mt-1">
+                                                                            {userRole === 'superadmin' && <button onClick={() => adjustCredits(user, 'weekend', -1)} className="w-5 h-5 flex items-center justify-center bg-white border border-purple-200 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-colors">-</button>}
+                                                                            <span className="block text-sm font-black text-purple-900">{bal.weekend || 0}</span>
+                                                                            {userRole === 'superadmin' && <button onClick={() => adjustCredits(user, 'weekend', 1)} className="w-5 h-5 flex items-center justify-center bg-white border border-purple-200 text-purple-600 rounded hover:bg-purple-600 hover:text-white transition-colors">+</button>}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
+
+                                                                {}
+                                                                {userRole === 'superadmin' && (
+                                                                    <button onClick={() => resetUserCredits(user)} className="mt-2 w-full py-2 bg-red-50 text-red-500 rounded-lg text-[9px] font-black uppercase tracking-widest border border-red-100 hover:bg-red-500 hover:text-white transition-colors no-print">
+                                                                        Reset Usage & Balance to Zero
+                                                                    </button>
+                                                                )}
 
                                                                 {userRole === 'superadmin' && (
                                                                     <div className="pt-3 border-t border-dashed flex justify-between items-center w-full">
@@ -2192,6 +2144,7 @@
                                                     })}
                                                 </div>
 
+                                                {/* Print-only simple list view for End User Contacts */}
                                                 <div className="hidden print:block w-full mt-4">
                                                     <table className="w-full text-left text-sm border-collapse border border-gray-300">
                                                         <thead>
@@ -2259,7 +2212,12 @@
                                                                 <span className="px-4 py-2.5 bg-yellow-50 text-yellow-600 border border-yellow-200 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center">Verify Pending</span>
                                                             )}
                                                             {userRole === 'superadmin' && (
-                                                                <button onClick={() => deleteRevenueRecord(item.key, item)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Icon name="x" className="w-5 h-5"/></button>
+                                                                <button onClick={() => {
+                                                                    setConfirmModal({
+                                                                        message: "Delete this pending package entirely?",
+                                                                        onConfirm: () => deleteBookingRecord(item.key, item)
+                                                                    });
+                                                                }} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Icon name="x" className="w-5 h-5"/></button>
                                                             )}
                                                         </div>
                                                     </div>
@@ -2284,13 +2242,7 @@
                                                                 <button onClick={() => { 
                                                                     setConfirmModal({
                                                                         message: isResting ? "Remove this resting hours block?" : "Remove this maintenance block?",
-                                                                        onConfirm: () => {
-                                                                            const n = {...bookings}; 
-                                                                            delete n[item.key]; 
-                                                                            setBookings(n);
-                                                                            syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
-                                                                            triggerToast("Slot opened.", "success");
-                                                                        }
+                                                                        onConfirm: () => { deleteBookingRecord(item.key, item); }
                                                                     });
                                                                 }} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 bg-white ${isResting ? 'border-indigo-200 text-indigo-600 hover:bg-indigo-600' : 'border-orange-200 text-orange-600 hover:bg-orange-600'} hover:text-white transition-all`}>Unlock Slot</button>
                                                             </div>
@@ -2310,13 +2262,7 @@
                                                                 <button onClick={() => { 
                                                                     setConfirmModal({
                                                                         message: "Delete this assignment completely?",
-                                                                        onConfirm: () => {
-                                                                            const n = {...bookings}; 
-                                                                            delete n[item.key]; 
-                                                                            setBookings(n);
-                                                                            syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
-                                                                            triggerToast("Assignment removed.", "success");
-                                                                        }
+                                                                        onConfirm: () => { deleteBookingRecord(item.key, item); }
                                                                     });
                                                                 }} className="p-2.5 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Icon name="x" className="w-5 h-5"/></button>
                                                             </div>
