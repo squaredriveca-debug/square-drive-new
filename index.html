@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#16a34a">
     <title>Square Drive | Elite Cricket Academy Booking</title>
     
+    <!-- External Scripts -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -44,7 +45,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
         const SUPABASE_URL = "https://iybkupbrptmnlieoliur.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5Ymt1cGJycHRtbmxpZW9saXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNjkxOTcsImV4cCI6MjA5Mjk0NTE5N30.OOSbzF36KLewkcfGxkFnsM6y9f6a5vc4KZkRlNK-lHI";
@@ -90,7 +91,8 @@
                 "clipboard-list": <React.Fragment><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/><path d="M9 8h6"/></React.Fragment>,
                 "shield-alert": <React.Fragment><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></React.Fragment>,
                 "crown": <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/>,
-                "wrench": <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                "wrench": <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
+                "cloud-snow": <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M8 15v.01M8 19v.01M12 17v.01M12 21v.01M16 15v.01M16 19v.01"/>
             };
             return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name] || null}</svg>;
         };
@@ -103,9 +105,39 @@
             const today = new Date();
             const tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1);
 
+            const [isAppReady, setIsAppReady] = useState(false);
             const [selectedDate, setSelectedDate] = useState(getISO(today));
             const [selections, setSelections] = useState([]);
             const [userRole, setUserRole] = useState('user'); 
+            
+            // Database State
+            const [bookings, setBookings] = useState({});
+            const [allContacts, setAllContacts] = useState({});
+            const [currentUser, setCurrentUser] = useState(null);
+            const [systemCodes, setSystemCodes] = useState({});
+            const [slotPrices, setSlotPrices] = useState(TIME_SLOTS.reduce((a, s) => ({ ...a, [s]: 500 }), {}));
+            const [userCredits, setUserCredits] = useState({});
+            const [blockedDays, setBlockedDays] = useState({});
+            const [packagePrices, setPackagePrices] = useState({ weekday: { 10: 3750, 30: 10500, 50: 16250 }, weekend: { 10: 5000, 30: 14250, 50: 22500 } });
+            
+            // Season Dates
+            const [seasonDates, setSeasonDates] = useState({ start: '', end: '' });
+            
+            // Auth & Modals
+            const [showUserLogin, setShowUserLogin] = useState(false);
+            const [loginStep, setLoginStep] = useState('choice'); 
+            const [userLoginType, setUserLoginType] = useState('player'); 
+            const [userLoginName, setUserLoginName] = useState('');
+            const [userLoginEmail, setUserLoginEmail] = useState('');
+            const [userLoginPhone, setUserLoginPhone] = useState('');
+            const [userLoginPassword, setUserLoginPassword] = useState('');
+            const [isForgotPassword, setIsForgotPassword] = useState(false);
+            const [resetOtp, setResetOtp] = useState('');
+            const [expectedResetOtp, setExpectedResetOtp] = useState('');
+            const [newPassword, setNewPassword] = useState('');
+            const [isResetOtpSent, setIsResetOtpSent] = useState(false);
+            const [isSendingResetOtp, setIsSendingResetOtp] = useState(false);
+
             const [showStaffLogin, setShowStaffLogin] = useState(false);
             const [staffLoginPass, setStaffLoginPass] = useState('');
             const [isStaffForgot, setIsStaffForgot] = useState(false);
@@ -116,15 +148,17 @@
             const [newStaffCode, setNewStaffCode] = useState('');
             const [isStaffOtpSent, setIsStaffOtpSent] = useState(false);
             const [isSendingStaffOtp, setIsSendingStaffOtp] = useState(false);
+
+            // App Overlays
             const [showRevenueAnalytics, setShowRevenueAnalytics] = useState(false);
             const [showContacts, setShowContacts] = useState(false);
             const [contactFilter, setContactFilter] = useState('all');
             const [showStaffBookings, setShowStaffBookings] = useState(false);
             const [editPasswordModal, setEditPasswordModal] = useState(null);
-
             const [toast, setToast] = useState(null);
             const [confirmModal, setConfirmModal] = useState(null);
             
+            // Manual Entry
             const [manualEntryModal, setManualEntryModal] = useState(null);
             const [manualEntryType, setManualEntryType] = useState('booking'); 
             const [manualName, setManualName] = useState('');
@@ -132,6 +166,7 @@
             const [manualPayment, setManualPayment] = useState('venue');
             const [manualScreenshot, setManualScreenshot] = useState(null);
 
+            // Pricing & Facility
             const [showFacilityControls, setShowFacilityControls] = useState(false);
             const [controlStartDate, setControlStartDate] = useState(getISO(today));
             const [controlEndDate, setControlEndDate] = useState(getISO(today));
@@ -141,55 +176,14 @@
             const [controlStartSlot, setControlStartSlot] = useState(TIME_SLOTS[0]);
             const [controlEndSlot, setControlEndSlot] = useState(TIME_SLOTS[TIME_SLOTS.length - 1]);
             const [controlReason, setControlReason] = useState('maintenance'); 
-
-            // Database States
-            const [bookings, setBookings] = useState(() => JSON.parse(localStorage.getItem('sd_bookings_final_v30')) || {});
-            const [allContacts, setAllContacts] = useState(() => JSON.parse(localStorage.getItem('sd_contacts_final_v30')) || {});
-            const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('sd_current_user')) || null);
-            const [systemCodes, setSystemCodes] = useState(() => {
-                const v31 = JSON.parse(localStorage.getItem('sd_codes_v31'));
-                if (v31) return v31;
-                return {
-                    staff: { code: 'staff', phone: '9082050040', email: 'squaredriveca@gmail.com', roleType: 'staff', name: 'Ground Staff' },
-                    admin: { code: 'admin', phone: '9920788088', email: 'squaredriveca@gmail.com', roleType: 'admin', name: 'Admin' },
-                    super: { code: 'super', phone: '9920788088', email: 'squaredriveca@gmail.com', roleType: 'superadmin', name: 'Super Admin' }
-                };
-            });
-            
-            const [slotPrices, setSlotPrices] = useState(() => JSON.parse(localStorage.getItem('sd_prices_v30')) || TIME_SLOTS.reduce((a, s) => ({ ...a, [s]: 500 }), {}));
-            const [userCredits, setUserCredits] = useState(() => JSON.parse(localStorage.getItem('sd_credits_v30')) || {});
-            const [blockedDays, setBlockedDays] = useState(() => JSON.parse(localStorage.getItem('sd_blocked_v30')) || {});
-            const [packagePrices, setPackagePrices] = useState(() => JSON.parse(localStorage.getItem('sd_pkg_prices_v30')) || { weekday: { 10: 3750, 30: 10500, 50: 16250 }, weekend: { 10: 5000, 30: 14250, 50: 22500 } });
-
-            const [seasonDates, setSeasonDates] = useState(() => JSON.parse(localStorage.getItem('sd_season_dates_v30')) || { start: '', end: '' });
-            const [slotPricesRainy, setSlotPricesRainy] = useState(() => JSON.parse(localStorage.getItem('sd_prices_rainy_v30')) || TIME_SLOTS.reduce((a, s) => ({ ...a, [s]: 600 }), {}));
-            const [packagePricesRainy, setPackagePricesRainy] = useState(() => JSON.parse(localStorage.getItem('sd_pkg_prices_rainy_v30')) || { weekday: { 10: 4500, 30: 12500, 50: 19500 }, weekend: { 10: 6000, 30: 17000, 50: 27000 } });
-
-            const [pkgView, setPkgView] = useState('weekday'); 
             const [showPricingModal, setShowPricingModal] = useState(false);
             const [pricingTab, setPricingTab] = useState('slots');
-            const [seasonTab, setSeasonTab] = useState('regular');
             const [tempPrices, setTempPrices] = useState({});
             const [tempPkgPrices, setTempPkgPrices] = useState({ weekday: {}, weekend: {} });
-            const [tempRainyPrices, setTempRainyPrices] = useState({});
-            const [tempRainyPkgPrices, setTempRainyPkgPrices] = useState({ weekday: {}, weekend: {} });
             const [tempSeasonDates, setTempSeasonDates] = useState({ start: '', end: '' });
+            const [pkgView, setPkgView] = useState('weekday'); 
 
-            const [showUserLogin, setShowUserLogin] = useState(false);
-            const [loginStep, setLoginStep] = useState('choice'); 
-            const [userLoginType, setUserLoginType] = useState('player'); 
-            const [userLoginName, setUserLoginName] = useState('');
-            const [userLoginEmail, setUserLoginEmail] = useState('');
-            const [userLoginPhone, setUserLoginPhone] = useState('');
-            const [userLoginPassword, setUserLoginPassword] = useState('');
-            
-            const [isForgotPassword, setIsForgotPassword] = useState(false);
-            const [resetOtp, setResetOtp] = useState('');
-            const [expectedResetOtp, setExpectedResetOtp] = useState('');
-            const [newPassword, setNewPassword] = useState('');
-            const [isResetOtpSent, setIsResetOtpSent] = useState(false);
-            const [isSendingResetOtp, setIsSendingResetOtp] = useState(false);
-            
+            // Checkout
             const [showPayment, setShowPayment] = useState(false);
             const [paymentMethod, setPaymentMethod] = useState('upi');
             const [selectedPackage, setSelectedPackage] = useState(null);
@@ -199,114 +193,114 @@
             const [screenshotPreview, setScreenshotPreview] = useState(null);
             const [isProcessing, setIsProcessing] = useState(false);
 
-            const [isAppReady, setIsAppReady] = useState(false);
-
             useEffect(() => {
                 let channel = null;
 
-                const initSupabaseAndFetch = async () => {
+                const initSupabase = async () => {
                     try {
-                        if (!supabase) throw new Error("Supabase client not found.");
-                        
-                        const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
-                        if (data && data.payload) {
-                            const p = data.payload;
-                            if (p.bookings) setBookings(p.bookings);
-                            if (p.allContacts) setAllContacts(p.allContacts);
-                            if (p.systemCodes) setSystemCodes(p.systemCodes);
-                            if (p.userCredits) setUserCredits(p.userCredits);
-                            if (p.slotPrices) setSlotPrices(p.slotPrices);
-                            if (p.blockedDays) setBlockedDays(p.blockedDays);
-                            if (p.packagePrices) setPackagePrices(p.packagePrices);
-                            if (p.seasonDates) setSeasonDates(p.seasonDates);
-                            if (p.slotPricesRainy) setSlotPricesRainy(p.slotPricesRainy);
-                            if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
+                        if(!supabase) {
+                            console.error("Supabase script failed to load.");
+                            setIsAppReady(true);
+                            return;
                         }
 
+                        // Fallback logic for LocalStorage if cloud fails
+                        const localBookings = JSON.parse(localStorage.getItem('sd_bookings_final_v30')) || {};
+                        const localContacts = JSON.parse(localStorage.getItem('sd_contacts_final_v30')) || {};
+                        const localCodes = JSON.parse(localStorage.getItem('sd_codes_v31')) || {
+                            staff: { code: 'staff', phone: '9082050040', email: 'squaredriveca@gmail.com' },
+                            admin: { code: 'admin', phone: '9920788088', email: 'squaredriveca@gmail.com' },
+                            super: { code: 'super', phone: '9920788088', email: 'squaredriveca@gmail.com' }
+                        };
+                        const localCredits = JSON.parse(localStorage.getItem('sd_credits_v30')) || {};
+                        const localPrices = JSON.parse(localStorage.getItem('sd_prices_v30')) || TIME_SLOTS.reduce((a, s) => ({ ...a, [s]: 500 }), {});
+                        const localBlocked = JSON.parse(localStorage.getItem('sd_blocked_v30')) || {};
+                        const localPkgPrices = JSON.parse(localStorage.getItem('sd_pkg_prices_v30')) || { weekday: { 10: 3750, 30: 10500, 50: 16250 }, weekend: { 10: 5000, 30: 14250, 50: 22500 } };
+                        const localSeason = JSON.parse(localStorage.getItem('sd_season_dates_v30')) || { start: '', end: '' };
+                        
+                        // Try fetching from cloud
+                        const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
+                        
+                        if (error) {
+                            console.warn("Could not fetch cloud data, falling back to local.");
+                            setBookings(localBookings); setAllContacts(localContacts); setSystemCodes(localCodes);
+                            setUserCredits(localCredits); setSlotPrices(localPrices); setBlockedDays(localBlocked);
+                            setPackagePrices(localPkgPrices); setSeasonDates(localSeason);
+                        } else if (data && data.payload) {
+                            const p = data.payload;
+                            setBookings(p.bookings || localBookings);
+                            setAllContacts(p.allContacts || localContacts);
+                            setSystemCodes(p.systemCodes || localCodes);
+                            setUserCredits(p.userCredits || localCredits);
+                            setSlotPrices(p.slotPrices || localPrices);
+                            setBlockedDays(p.blockedDays || localBlocked);
+                            setPackagePrices(p.packagePrices || localPkgPrices);
+                            setSeasonDates(p.seasonDates || localSeason);
+                        } else {
+                            // First time empty cloud database, push local defaults
+                            const defaults = { bookings: localBookings, allContacts: localContacts, systemCodes: localCodes, userCredits: localCredits, slotPrices: localPrices, blockedDays: localBlocked, packagePrices: localPkgPrices, seasonDates: localSeason };
+                            await supabase.from('app_settings').upsert({ id: 'global', payload: defaults });
+                            setBookings(localBookings); setAllContacts(localContacts); setSystemCodes(localCodes); setUserCredits(localCredits); setSlotPrices(localPrices); setBlockedDays(localBlocked); setPackagePrices(localPkgPrices); setSeasonDates(localSeason);
+                        }
+
+                        // Subscribe to Realtime Updates
                         channel = supabase.channel('realtime_app_settings')
                             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
                                 const p = payload.new.payload;
                                 if (p) {
-                                    if (p.bookings) setBookings(p.bookings);
-                                    if (p.allContacts) setAllContacts(p.allContacts);
-                                    if (p.systemCodes) setSystemCodes(p.systemCodes);
-                                    if (p.userCredits) setUserCredits(p.userCredits);
-                                    if (p.slotPrices) setSlotPrices(p.slotPrices);
-                                    if (p.blockedDays) setBlockedDays(p.blockedDays);
-                                    if (p.packagePrices) setPackagePrices(p.packagePrices);
-                                    if (p.seasonDates) setSeasonDates(p.seasonDates);
-                                    if (p.slotPricesRainy) setSlotPricesRainy(p.slotPricesRainy);
-                                    if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
+                                    setBookings(p.bookings || {});
+                                    setAllContacts(p.allContacts || {});
+                                    setSystemCodes(p.systemCodes || {});
+                                    setUserCredits(p.userCredits || {});
+                                    setSlotPrices(p.slotPrices || {});
+                                    setBlockedDays(p.blockedDays || {});
+                                    setPackagePrices(p.packagePrices || {});
+                                    setSeasonDates(p.seasonDates || { start: '', end: '' });
                                 }
                             })
                             .subscribe();
 
-                    } catch (err) {
-                        console.error("Supabase sync failed.", err);
+                    } catch (e) {
+                        console.error("Critical Cloud Error:", e);
                     } finally {
                         setIsAppReady(true);
                     }
                 };
 
-                initSupabaseAndFetch();
-                return () => { if (channel && supabase) supabase.removeChannel(channel); };
+                initSupabase();
+
+                return () => {
+                    if (channel && supabase) supabase.removeChannel(channel);
+                };
             }, []);
 
-            const syncToCloud = async (payloadOverride) => {
-                localStorage.setItem('sd_bookings_final_v30', JSON.stringify(payloadOverride.bookings));
-                localStorage.setItem('sd_contacts_final_v30', JSON.stringify(payloadOverride.allContacts));
-                localStorage.setItem('sd_credits_v30', JSON.stringify(payloadOverride.userCredits));
-                
-                if (!supabase) return;
-                try {
-                    await supabase.from('app_settings').upsert({ id: 'global', payload: payloadOverride });
-                } catch (err) {
-                    console.error("Cloud push failed", err);
+            const syncToCloud = async (newData) => {
+                if(supabase) {
+                    try {
+                        await supabase.from('app_settings').upsert({ id: 'global', payload: newData });
+                    } catch(e) { console.error("Sync to cloud failed:", e); }
                 }
+                // Always sync to local storage as fallback
+                localStorage.setItem('sd_bookings_final_v30', JSON.stringify(newData.bookings));
+                localStorage.setItem('sd_contacts_final_v30', JSON.stringify(newData.allContacts));
+                localStorage.setItem('sd_codes_v31', JSON.stringify(newData.systemCodes));
+                localStorage.setItem('sd_credits_v30', JSON.stringify(newData.userCredits));
+                localStorage.setItem('sd_prices_v30', JSON.stringify(newData.slotPrices));
+                localStorage.setItem('sd_blocked_v30', JSON.stringify(newData.blockedDays));
+                localStorage.setItem('sd_pkg_prices_v30', JSON.stringify(newData.packagePrices));
+                localStorage.setItem('sd_season_dates_v30', JSON.stringify(newData.seasonDates));
+            };
+
+            const forceCloudSync = async () => {
+                triggerToast("Syncing database to cloud...", "success");
+                await syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                triggerToast("Cloud Database Synced!", "success");
             };
 
             const triggerToast = (msg, type = 'success') => {
                 setToast({ msg, type });
                 setTimeout(() => setToast(null), 4000);
             };
-
-            const forceSyncToCloud = async () => {
-                if (!supabase) return triggerToast("Database offline. Missing Keys or Script.", "error");
-                setIsProcessing(true);
-                triggerToast("Force Syncing...", "success");
-                try {
-                    const payload = { bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy };
-                    const { error } = await supabase.from('app_settings').upsert({ id: 'global', payload });
-                    if (error) throw error;
-                    triggerToast("Cloud Database Synced!", "success");
-                } catch (err) {
-                    triggerToast("Sync Failed: " + err.message, "error");
-                } finally {
-                    setIsProcessing(false);
-                }
-            };
-
-            useEffect(() => {
-                if (showPricingModal) {
-                    setTempPrices({ ...slotPrices });
-                    setTempPkgPrices({ weekday: { ...packagePrices.weekday }, weekend: { ...packagePrices.weekend } });
-                    setTempRainyPrices({ ...slotPricesRainy });
-                    setTempRainyPkgPrices({ weekday: { ...packagePricesRainy.weekday }, weekend: { ...packagePricesRainy.weekend } });
-                    setTempSeasonDates({ ...seasonDates });
-                    setSeasonTab('regular');
-                }
-            }, [showPricingModal, slotPrices, packagePrices, slotPricesRainy, packagePricesRainy, seasonDates]);
-
-            const isDateInRainySeason = (dateStr) => {
-                if (!seasonDates.start || !seasonDates.end) return false;
-                return dateStr >= seasonDates.start && dateStr <= seasonDates.end;
-            };
-
-            const isRainySelected = useMemo(() => isDateInRainySeason(selectedDate), [selectedDate, seasonDates]);
-            const isTodayRainy = useMemo(() => isDateInRainySeason(getISO(today)), [seasonDates]);
-
-            const activeSlotPrices = useMemo(() => isDateInRainySeason(selectedDate) ? slotPricesRainy : slotPrices, [selectedDate, slotPricesRainy, slotPrices, seasonDates]);
-            const activePackagePrices = useMemo(() => isDateInRainySeason(selectedDate) ? packagePricesRainy : packagePrices, [selectedDate, packagePricesRainy, packagePrices, seasonDates]);
 
             const handleCopyUPI = () => {
                 const tempTextArea = document.createElement("textarea");
@@ -315,8 +309,12 @@
                 tempTextArea.style.left = "-9999px";
                 document.body.appendChild(tempTextArea);
                 tempTextArea.select();
-                try { document.execCommand("copy"); triggerToast("UPI Address Copied!", "success"); } 
-                catch (err) { triggerToast("Could not copy UPI address.", "error"); }
+                try {
+                    document.execCommand("copy");
+                    triggerToast("UPI Address Copied!", "success");
+                } catch (err) {
+                    triggerToast("Could not copy UPI address.", "error");
+                }
                 document.body.removeChild(tempTextArea);
             };
 
@@ -336,11 +334,21 @@
                 return now > slotTime;
             };
 
+            // Rainy Season Evaluator
+            const isDateInRainySeason = (dateStr) => {
+                if (!seasonDates.start || !seasonDates.end) return false;
+                return dateStr >= seasonDates.start && dateStr <= seasonDates.end;
+            };
+
+            const isRainySelected = useMemo(() => isDateInRainySeason(selectedDate), [selectedDate, seasonDates]);
+            const isTodayRainy = useMemo(() => isDateInRainySeason(getISO(today)), [seasonDates]);
+
             const isWeekendSelected = useMemo(() => {
                 const day = new Date(selectedDate).getDay();
                 return day === 0 || day === 6; 
             }, [selectedDate]);
 
+            // Revenue Tools
             const [revStartDateStr, setRevStartDateStr] = useState(getISO(today));
             const [revEndDateStr, setRevEndDateStr] = useState(getISO(today));
 
@@ -355,31 +363,37 @@
                 const revMonth = revStartDateStr.substring(0, 7);
                 const actualTodayStr = getISO(new Date());
 
-                Object.values(bookings).forEach(b => {
+                Object.entries(bookings).forEach(([key, b]) => {
                     if (!b || !b.priceAtBooking) return;
+                    
                     let itemDateStr = "";
                     if (b.type === 'package') {
                         const p = b.date.split('/');
                         if (p.length === 3) itemDateStr = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+                        else itemDateStr = b.bookingDate ? b.bookingDate.split('/').reverse().join('-') : ""; // fallback
                     } else {
                         itemDateStr = b.date;
                     }
+
                     if (!itemDateStr) return;
 
                     const amt = b.priceAtBooking || 0;
+
                     if (itemDateStr === actualTodayStr) todayRev += amt;
                     if (itemDateStr >= revStartDateStr && itemDateStr <= revEndDateStr) {
                         selectedDateRev += amt;
-                        selectedDateBreakdown.push({ ...b, parsedDate: itemDateStr, rawKey: b.key });
+                        selectedDateBreakdown.push({ ...b, parsedDate: itemDateStr, key });
                     }
                     if (itemDateStr.startsWith(revMonth)) monthRev += amt;
                     if (itemDateStr.startsWith(revYear)) annualRev += amt;
                 });
 
                 selectedDateBreakdown.sort((a,b) => a.parsedDate.localeCompare(b.parsedDate));
+
                 return { todayRev, selectedDateRev, monthRev, annualRev, selectedDateBreakdown };
             }, [bookings, revStartDateStr, revEndDateStr]);
             
+            // Manifest
             const dayBookingsList = useMemo(() => {
                 return Object.entries(bookings)
                     .filter(([key, b]) => key.startsWith(selectedDate) && (b.type === 'user' || b.type === 'system'))
@@ -387,24 +401,22 @@
                     .sort((a, b) => a.slot.localeCompare(b.slot));
             }, [bookings, selectedDate]);
 
-            const pendingPackages = useMemo(() => {
+            const pendingPackagesList = useMemo(() => {
                 return Object.entries(bookings)
                     .filter(([key, b]) => b.type === 'package' && b.paymentStatus === 'pending')
-                    .map(([key, b]) => ({ ...b, key }));
+                    .map(([key, b]) => ({ ...b, key }))
+                    .sort((a, b) => b.bookingDate?.localeCompare(a.bookingDate) || 0);
             }, [bookings]);
 
-            const selectionTotal = useMemo(() => selections.reduce((t, s) => t + (activeSlotPrices[s.slot] || 500), 0), [selections, activeSlotPrices]);
+            // Financials
+            const selectionTotal = useMemo(() => selections.reduce((t, s) => t + (slotPrices[s.slot] || 500), 0), [selections, slotPrices]);
             const finalPayable = selectedPackage ? selectedPackage.price : selectionTotal;
 
             const userBalObj = useMemo(() => {
                 const defaults = { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
                 if (!currentUser) return defaults;
+                const raw = userCredits[currentUser.email] || {};
                 
-                const eKey = currentUser.email;
-                const pKey = getCleanPhone(currentUser.phone);
-                const activeKey = (eKey && userCredits[eKey]) ? eKey : (pKey && userCredits[pKey] ? pKey : (eKey || pKey));
-
-                const raw = userCredits[activeKey] || {};
                 const weekday = raw.weekday || 0;
                 const weekend = raw.weekend || 0;
                 const weekdayBought = raw.weekdayBought !== undefined ? raw.weekdayBought : weekday;
@@ -418,75 +430,43 @@
             const hasEnoughWeekdayCredits = userBalObj.weekday >= selections.length;
             const isWeekdayAllowed = !isWeekendSelected;
             const canUseWeekday = hasEnoughWeekdayCredits && isWeekdayAllowed && !isRainySelected;
-            
             const hasEnoughWeekendCredits = userBalObj.weekend >= selections.length;
             const canUseWeekend = hasEnoughWeekendCredits && !isRainySelected;
 
             const userHistory = useMemo(() => {
                 if (!currentUser) return [];
                 const phone = getCleanPhone(currentUser.phone || '');
+                
                 return Object.entries(bookings)
                     .filter(([key, b]) => b.phone === phone || b.email === currentUser.email)
                     .map(([key, b]) => ({ ...b, key }))
                     .sort((a, b) => {
-                        const getActionTimestamp = (item) => {
-                            if (item.type === 'package') {
-                                const parts = item.key.split('-');
-                                const ms = parseInt(parts[parts.length - 1], 10);
-                                if (!isNaN(ms) && ms > 1000000000000) return ms;
-                            }
+                        // Precise Chronological Date + Time parsing
+                        const parseDateTime = (dateStr, timeStr) => {
+                            if (!dateStr || !timeStr) return 0;
+                            const [day, month, year] = dateStr.split(/[-/]/);
+                            if (!day || !month || !year) return 0;
                             
-                            const bDate = item.bookingDate || item.date; 
-                            const bTime = item.bookingTime || item.time || '12:00 AM';
+                            const [time, modifier] = timeStr.split(' ');
+                            if (!time || !modifier) return 0;
+                            let [hours, minutes] = time.split(':');
+                            if (!hours || !minutes) return 0;
                             
-                            if (bDate) {
-                                try {
-                                    let day, month, year;
-                                    if (bDate.includes('/')) {
-                                        const parts = bDate.split('/');
-                                        day = parseInt(parts[0], 10);
-                                        month = parseInt(parts[1], 10) - 1;
-                                        year = parseInt(parts[2], 10);
-                                    } else if (bDate.includes('-')) {
-                                        const parts = bDate.split('-');
-                                        year = parseInt(parts[0], 10);
-                                        month = parseInt(parts[1], 10) - 1;
-                                        day = parseInt(parts[2], 10);
-                                    } else {
-                                        return 0;
-                                    }
-        
-                                    let [timeStr, modifier] = bTime.trim().split(/\s+/);
-                                    let [hours, minutes] = timeStr.split(':');
-                                    hours = parseInt(hours, 10) || 0;
-                                    minutes = parseInt(minutes, 10) || 0;
-        
-                                    if (modifier) {
-                                        modifier = modifier.toUpperCase();
-                                        if (modifier === 'PM' && hours !== 12) hours += 12;
-                                        if (modifier === 'AM' && hours === 12) hours = 0;
-                                    }
-        
-                                    return new Date(year, month, day, hours, minutes).getTime();
-                                } catch (e) {
-                                    return 0;
-                                }
-                            }
-                            return 0;
+                            hours = parseInt(hours, 10);
+                            if (hours === 12 && modifier.toUpperCase() === 'AM') hours = 0;
+                            else if (modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
+                            
+                            return new Date(year, month - 1, day, hours, parseInt(minutes, 10)).getTime();
                         };
+
+                        const timeA = parseDateTime(a.bookingDate || a.date, a.bookingTime || a.time);
+                        const timeB = parseDateTime(b.bookingDate || b.date, b.bookingTime || b.time);
                         
-                        const timeA = getActionTimestamp(a);
-                        const timeB = getActionTimestamp(b);
-                        
-                        if (timeA === timeB) {
-                            if (a.type === 'package' && b.type !== 'package') return 1;
-                            if (b.type === 'package' && a.type !== 'package') return -1;
-                            return b.key.localeCompare(a.key);
-                        }
-                        return timeB - timeA; 
+                        return timeB - timeA; // Descending (Newest to Oldest)
                     });
             }, [bookings, currentUser]);
 
+            // Contacts
             const cleanManualPhone = getCleanPhone(manualPhone);
             const matchedManualUser = useMemo(() => {
                 if (!cleanManualPhone || cleanManualPhone.length < 5) return null;
@@ -502,32 +482,34 @@
             }, [matchedManualUser, userCredits]);
 
             const isManualWeekend = manualEntryModal ? (new Date(manualEntryModal.date).getDay() === 0 || new Date(manualEntryModal.date).getDay() === 6) : false;
-            const isManualRainy = manualEntryModal ? isDateInRainySeason(manualEntryModal.date) : false;
             const manualRelevantCredits = isManualWeekend ? (manualUserBal.weekend || 0) : ((manualUserBal.weekday || 0) + (manualUserBal.weekend || 0));
+            const isManualRainy = manualEntryModal ? isDateInRainySeason(manualEntryModal.date) : false;
             const canUseManualCredits = manualRelevantCredits > 0 && !isManualRainy;
 
             const filteredContacts = useMemo(() => {
                 if (contactFilter === 'system') return [];
-                return Object.entries(allContacts).filter(([phone, user]) => contactFilter === 'all' || user.type === contactFilter);
+                return Object.entries(allContacts).filter(([phone, user]) => 
+                    contactFilter === 'all' || user.type === contactFilter
+                );
             }, [allContacts, contactFilter]);
 
             useEffect(() => {
-                if (manualPayment === 'credits' && !canUseManualCredits) setManualPayment('venue');
+                if (manualPayment === 'credits' && !canUseManualCredits) {
+                    setManualPayment('venue');
+                }
             }, [canUseManualCredits, manualPayment]);
 
             const handleDateChange = (newDate) => { if(!newDate) return; setSelectedDate(newDate); setSelections([]); };
 
-            const getSlotsInRange = (start, end) => {
-                const sIdx = TIME_SLOTS.indexOf(start);
-                const eIdx = TIME_SLOTS.indexOf(end);
-                if (sIdx === -1 || eIdx === -1 || sIdx > eIdx) return [];
-                return TIME_SLOTS.slice(sIdx, eIdx + 1);
-            };
-
-            const applyFacilityControl = async (action) => {
+            const applyFacilityControl = (action) => {
                 const getDatesInRange = (start, end) => {
-                    const dateArr = []; let curr = new Date(start); const endDate = new Date(end);
-                    while (curr <= endDate) { dateArr.push(getISO(curr)); curr.setDate(curr.getDate() + 1); }
+                    const dateArr = [];
+                    let curr = new Date(start);
+                    const endDate = new Date(end);
+                    while (curr <= endDate) {
+                        dateArr.push(getISO(curr));
+                        curr.setDate(curr.getDate() + 1);
+                    }
                     return dateArr;
                 };
 
@@ -535,14 +517,26 @@
                 if (targetDates.length === 0) return triggerToast("Invalid date range selected.", "error");
 
                 if (controlScope === 'facility' && controlDuration === 'fullday') {
-                    const nextBlocked = { ...blockedDays };
-                    targetDates.forEach(d => { if (action === 'block') nextBlocked[d] = true; else delete nextBlocked[d]; });
-                    setBlockedDays(nextBlocked);
-                    setSelections([]); setShowFacilityControls(false);
-                    await syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays: nextBlocked, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                    setBlockedDays(prev => {
+                        const next = { ...prev };
+                        targetDates.forEach(d => {
+                            if (action === 'block') next[d] = true;
+                            else delete next[d];
+                        });
+                        syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays: next, packagePrices, seasonDates });
+                        return next;
+                    });
+                    setSelections([]); 
+                    setShowFacilityControls(false);
                     triggerToast(`Facility completely ${action === 'block' ? 'closed' : 'reopened'} for selected dates.`, "success");
                     return;
                 }
+
+                const getSlotsInRange = (s, e) => {
+                    const sIdx = TIME_SLOTS.indexOf(s); const eIdx = TIME_SLOTS.indexOf(e);
+                    if (sIdx === -1 || eIdx === -1 || sIdx > eIdx) return [];
+                    return TIME_SLOTS.slice(sIdx, eIdx + 1);
+                };
 
                 let targetNets = controlScope === 'facility' ? NETS : controlNets;
                 let targetSlots = controlDuration === 'fullday' ? TIME_SLOTS : getSlotsInRange(controlStartSlot, controlEndSlot);
@@ -550,60 +544,65 @@
                 if (targetNets.length === 0) return triggerToast("Please select at least one net to block.", "error");
                 if (targetSlots.length === 0) return triggerToast("Invalid time range selected.", "error");
 
-                const nextBookings = { ...bookings };
-                targetDates.forEach(d => {
-                    targetNets.forEach(net => {
-                        targetSlots.forEach(slot => {
-                            const key = `${d}-${net}-${slot}`;
-                            if (action === 'block') {
-                                nextBookings[key] = { 
-                                    type: 'system', status: controlReason, 
-                                    user: controlReason === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
-                                    date: d, slot: slot, net: net, 
-                                    bookingDate: new Date().toLocaleDateString('en-IN'),
-                                    bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                                };
-                            } else {
-                                if (nextBookings[key]?.status === 'maintenance' || nextBookings[key]?.status === 'resting') delete nextBookings[key];
-                            }
+                setBookings(prev => {
+                    const next = { ...prev };
+                    targetDates.forEach(d => {
+                        targetNets.forEach(net => {
+                            targetSlots.forEach(slot => {
+                                const key = `${d}-${net}-${slot}`;
+                                if (action === 'block') {
+                                    next[key] = { 
+                                        type: 'system', 
+                                        status: controlReason, 
+                                        user: controlReason === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
+                                        date: d, slot: slot, net: net, 
+                                        bookingDate: new Date().toLocaleDateString('en-IN'),
+                                        bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                                    };
+                                } else {
+                                    if (next[key]?.status === 'maintenance' || next[key]?.status === 'resting') {
+                                        delete next[key];
+                                    }
+                                }
+                            });
                         });
                     });
+                    syncToCloud({ bookings: next, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                    return next;
                 });
-                setBookings(nextBookings);
-                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+
                 triggerToast(`${controlReason === 'resting' ? 'Resting hours' : 'Maintenance'} blocks ${action === 'block' ? 'applied' : 'cleared'} successfully across selected dates.`, "success");
                 setShowFacilityControls(false);
             };
 
-            const handleUserLoginSubmit = async (e) => {
+            const handleUserLoginSubmit = (e) => {
                 e.preventDefault();
                 const cleanPhone = getCleanPhone(userLoginPhone);
-                let nextContacts = { ...allContacts };
-
                 if (userLoginType === 'guest') {
                     const guestUser = { name: userLoginName, email: userLoginEmail || '', phone: cleanPhone, type: 'guest' };
-                    if (!nextContacts[cleanPhone]) {
-                        nextContacts[cleanPhone] = guestUser;
+                    if (!allContacts[cleanPhone]) {
+                        const nextContacts = { ...allContacts, [cleanPhone]: guestUser };
                         setAllContacts(nextContacts);
-                        await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                        syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                     }
-                    setCurrentUser(nextContacts[cleanPhone] || guestUser);
+                    setCurrentUser(allContacts[cleanPhone] || guestUser);
                     triggerToast("Logged in as Guest successfully!", "success");
                     setShowUserLogin(false); return;
                 }
-                const existing = nextContacts[cleanPhone];
+                const existing = allContacts[cleanPhone];
                 if (existing) {
                     if (existing.password === userLoginPassword) { 
                         setCurrentUser(existing); 
                         triggerToast("Logged in successfully!", "success");
                         setShowUserLogin(false); 
-                    } else triggerToast("Invalid Password. Identity rejected.", "error");
+                    }
+                    else triggerToast("Invalid Password. Identity rejected.", "error");
                 } else {
                     const newUser = { name: userLoginName, email: userLoginEmail, phone: cleanPhone, type: userLoginType, password: userLoginPassword };
-                    nextContacts[cleanPhone] = newUser;
+                    const nextContacts = { ...allContacts, [cleanPhone]: newUser };
                     setAllContacts(nextContacts);
                     setCurrentUser(newUser); 
-                    await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                    syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                     triggerToast("New profile registered & logged in!", "success");
                     setShowUserLogin(false);
                 }
@@ -627,240 +626,26 @@
                             })
                         });
                         if (res.ok) { 
-                            setExpectedResetOtp(otp); setIsResetOtpSent(true); 
+                            setExpectedResetOtp(otp); 
+                            setIsResetOtpSent(true); 
                             triggerToast("Recovery OTP sent to your registered email!", "success");
                         }
-                    } catch (err) { triggerToast("Email gateway connection error.", "error"); } 
-                    finally { setIsSendingResetOtp(false); }
+                    } catch (err) { 
+                        triggerToast("Email gateway connection error.", "error"); 
+                    } finally { 
+                        setIsSendingResetOtp(false); 
+                    }
                 } else {
                     if (resetOtp === expectedResetOtp || resetOtp === "123456") {
                         const nextContacts = { ...allContacts, [cleanPhone]: { ...allContacts[cleanPhone], password: newPassword } };
                         setAllContacts(nextContacts);
-                        await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                        syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                         triggerToast("Password adjusted successfully!", "success"); 
-                        setIsForgotPassword(false); setIsResetOtpSent(false); setLoginStep('form');
+                        setIsForgotPassword(false); 
+                        setIsResetOtpSent(false); 
+                        setLoginStep('form');
                     } else triggerToast("Invalid OTP code matching failed.", "error");
                 }
-            };
-
-            const handleSlotClick = (net, slot) => {
-                if (isSlotExpired(selectedDate, slot) || blockedDays[selectedDate]) return;
-                const key = `${selectedDate}-${net}-${slot}`;
-                
-                if (userRole !== 'user') {
-                    if (bookings[key]) {
-                        let msg = `Remove entry for ${net} at ${slot}?`;
-                        if (bookings[key].status === 'maintenance') msg = `Remove maintenance block for ${net} at ${slot}?`;
-                        if (bookings[key].status === 'resting') msg = `Remove resting hours block for ${net} at ${slot}?`;
-                        
-                        setConfirmModal({
-                            message: msg,
-                            onConfirm: async () => {
-                                const nextBookings = { ...bookings }; delete nextBookings[key]; 
-                                setBookings(nextBookings);
-                                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                                triggerToast((bookings[key]?.status === 'maintenance' || bookings[key]?.status === 'resting') ? "Block cleared." : "Lane entry cleared.", "success");
-                            }
-                        });
-                    } else {
-                        setManualName(''); setManualPhone(''); setManualPayment('venue'); setManualScreenshot(null);
-                        setManualEntryType('booking');
-                        setManualEntryModal({ net, slot, date: selectedDate });
-                    }
-                    return;
-                }
-                
-                if (bookings[key] && bookings[key].status !== 'occupied') {
-                    if (bookings[key].email === currentUser?.email) return; 
-                    return; 
-                }
-                
-                const isS = selections.some(s => s.net === net && s.slot === slot);
-                if (isS) setSelections(selections.filter(s => !(s.net === net && s.slot === slot)));
-                else setSelections([...selections, { net, slot }]);
-            };
-
-            const toggleOccupy = async (key) => {
-                const nextBookings = { ...bookings, [key]: { ...bookings[key], status: bookings[key].status === 'occupied' ? null : 'occupied' } };
-                setBookings(nextBookings);
-                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                triggerToast("Occupancy status toggled.", "success");
-            };
-
-            const togglePaymentStatus = async (key) => {
-                if (userRole !== 'admin' && userRole !== 'superadmin') {
-                    return triggerToast("Only Admins or Super Admins can verify payments.", "error");
-                }
-                
-                const matchedKey = Object.keys(systemCodes).find(k => 
-                    systemCodes[k].roleType === userRole || 
-                    (k.startsWith('super') && userRole === 'superadmin') || 
-                    (k.startsWith('admin') && userRole === 'admin')
-                );
-                const verifierName = matchedKey && systemCodes[matchedKey].name ? systemCodes[matchedKey].name : userRole.toUpperCase();
-
-                const nextBookings = { 
-                    ...bookings, 
-                    [key]: { 
-                        ...bookings[key], 
-                        paymentStatus: bookings[key].paymentStatus === 'verified' ? 'pending' : 'verified',
-                        verifiedBy: bookings[key].paymentStatus === 'verified' ? null : verifierName,
-                        verifiedByRole: bookings[key].paymentStatus === 'verified' ? null : userRole
-                    } 
-                };
-                setBookings(nextBookings);
-                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                triggerToast("Payment status updated.", "success");
-            };
-
-            const handleScreenshotUpload = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => setScreenshotPreview(reader.result);
-                    reader.readAsDataURL(file);
-                }
-            };
-
-            const finalizeBooking = () => {
-                setIsProcessing(true);
-                const now = new Date();
-                const ticketNo = `SD-${now.getTime().toString().slice(-6)}`;
-                const cleanPhone = getCleanPhone(currentUser?.phone || '');
-                
-                setTimeout(async () => {
-                    const nextBookings = { ...bookings };
-                    const nextCredits = { ...userCredits };
-
-                    if (selectedPackage) {
-                        const tier = selectedPackage.type; 
-                        const pkgKey = `pkg-${currentUser.email}-${Date.now()}`;
-                        const isPending = (paymentMethod === 'upi' || paymentMethod === 'venue');
-
-                        if (!isPending) {
-                            const uo = nextCredits[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
-                            nextCredits[currentUser.email] = { 
-                                ...uo, 
-                                [tier]: (uo[tier] || 0) + selectedPackage.sessions,
-                                [`${tier}Bought`]: (uo[`${tier}Bought`] || 0) + selectedPackage.sessions
-                            };
-                        }
-
-                        nextBookings[pkgKey] = {
-                            type: 'package',
-                            title: selectedPackage.title,
-                            tier: tier,
-                            sessions: selectedPackage.sessions,
-                            priceAtBooking: selectedPackage.price,
-                            paymentMode: paymentMethod,
-                            paymentStatus: isPending ? 'pending' : 'verified',
-                            user: currentUser.name,
-                            email: currentUser.email,
-                            phone: cleanPhone,
-                            date: now.toLocaleDateString('en-IN'),
-                            time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                        };
-                        
-                        setBookings(nextBookings);
-                        if (!isPending) setUserCredits(nextCredits);
-                        await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                        triggerToast(isPending ? "Package requested! Pending admin verification." : "Package added to account credits successfully!", "success");
-                    
-                    } else {
-                        if (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') {
-                            const uo = { ...nextCredits[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
-                            let rem = selections.length;
-                            if (paymentMethod === 'weekend_credits') {
-                                const used = Math.min(uo.weekend || 0, rem);
-                                uo.weekend = Math.max(0, (uo.weekend || 0) - used);
-                                uo.weekendUsed = (uo.weekendUsed || 0) + used;
-                            } else {
-                                const used = Math.min(uo.weekday || 0, rem);
-                                uo.weekday = Math.max(0, (uo.weekday || 0) - used);
-                                uo.weekdayUsed = (uo.weekdayUsed || 0) + used;
-                            }
-                            nextCredits[currentUser.email] = uo;
-                        }
-                        
-                        selections.forEach(s => { 
-                            nextBookings[`${selectedDate}-${s.net}-${s.slot}`] = { 
-                                type: 'user', user: currentUser.name, email: currentUser.email, phone: cleanPhone,
-                                priceAtBooking: (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 0 : (activeSlotPrices[s.slot] || 500), 
-                                paymentMode: paymentMethod, 
-                                paymentStatus: (paymentMethod === 'upi' || paymentMethod === 'venue') ? 'pending' : 'verified',
-                                date: selectedDate, slot: s.slot, net: s.net, status: null,
-                                bookingDate: now.toLocaleDateString('en-IN'),
-                                bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                            }; 
-                        });
-                        setBookings(nextBookings);
-                        setUserCredits(nextCredits);
-                        await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                        triggerToast("Nets reserved successfully!", "success");
-                    }
-                    
-                    const newTicket = {
-                        ticketNo, bookedBy: currentUser.name, role: currentUser.type.toUpperCase(),
-                        dateOfBooking: now.toLocaleDateString('en-IN'), timeOfBooking: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                        trainingDate: selectedPackage ? 'Membership Pack' : selectedDate, 
-                        details: selectedPackage ? [{ net: 'Credits', slot: `${selectedPackage.sessions} Sessions` }] : selections.map(s => ({ net: s.net, slot: s.slot })),
-                        paymentStatus: paymentMethod === 'upi' ? 'Verification Pending' : ((paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 'Paid via Credits' : 'Pay at Ground'),
-                        amount: finalPayable, verificationImage: screenshotPreview 
-                    };
-
-                    setTicketData(newTicket); 
-                    setIsProcessing(false); setIsSuccess(true); setSelections([]); setSelectedPackage(null); setShowPayment(false); setScreenshotPreview(null);
-                }, 1500);
-            };
-
-            const verifyPackage = async (pkgKey) => {
-                if (userRole !== 'admin' && userRole !== 'superadmin') return triggerToast("Only Admins can verify.", "error");
-                const pkg = bookings[pkgKey];
-                if (!pkg || pkg.paymentStatus === 'verified') return;
-
-                const matchedKey = Object.keys(systemCodes).find(k => systemCodes[k].roleType === userRole || (k.startsWith('super') && userRole === 'superadmin') || (k.startsWith('admin') && userRole === 'admin'));
-                const verifierName = matchedKey && systemCodes[matchedKey].name ? systemCodes[matchedKey].name : userRole.toUpperCase();
-
-                const nextBookings = {
-                    ...bookings,
-                    [pkgKey]: {
-                        ...pkg,
-                        paymentStatus: 'verified',
-                        verifiedBy: verifierName,
-                        verifiedByRole: userRole
-                    }
-                };
-
-                const tier = pkg.tier;
-                const emailKey = pkg.email || pkg.phone;
-                const activeKey = (pkg.email && userCredits[pkg.email]) ? pkg.email : (pkg.phone && userCredits[pkg.phone] ? pkg.phone : emailKey);
-
-                const nextCredits = { ...userCredits };
-                const uo = nextCredits[activeKey] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
-
-                nextCredits[activeKey] = {
-                    ...uo,
-                    [tier]: (uo[tier] || 0) + pkg.sessions,
-                    [`${tier}Bought`]: (uo[`${tier}Bought`] || 0) + pkg.sessions
-                };
-
-                setBookings(nextBookings);
-                setUserCredits(nextCredits);
-                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                triggerToast("Membership verified & credits added!", "success");
-            };
-
-            const cancelPackage = (pkgKey) => {
-                setConfirmModal({
-                    message: "Reject this membership purchase?",
-                    onConfirm: async () => {
-                        const n = { ...bookings };
-                        delete n[pkgKey];
-                        setBookings(n);
-                        await syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                        triggerToast("Package purchase rejected.", "success");
-                    }
-                });
             };
 
             const handleStaffLogin = (e) => {
@@ -919,7 +704,7 @@
                     if (staffResetOtp === expectedStaffOtp || staffResetOtp === "123456") {
                         const nextCodes = { ...systemCodes, [staffForgotRole]: { ...systemCodes[staffForgotRole], code: newStaffCode.toLowerCase() } };
                         setSystemCodes(nextCodes);
-                        await syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                        syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                         triggerToast("Access Token adjusted successfully!", "success"); 
                         setIsStaffForgot(false); 
                         setIsStaffOtpSent(false);
@@ -933,43 +718,289 @@
                 }
             };
 
+            const handleSlotClick = (net, slot) => {
+                if (isSlotExpired(selectedDate, slot) || blockedDays[selectedDate]) return;
+                const key = `${selectedDate}-${net}-${slot}`;
+                
+                if (userRole !== 'user') {
+                    if (bookings[key]) {
+                        let msg = `Remove entry for ${net} at ${slot}?`;
+                        if (bookings[key].status === 'maintenance') msg = `Remove maintenance block for ${net} at ${slot}?`;
+                        if (bookings[key].status === 'resting') msg = `Remove resting hours block for ${net} at ${slot}?`;
+                        
+                        setConfirmModal({
+                            message: msg,
+                            onConfirm: () => {
+                                const n = { ...bookings }; 
+                                delete n[key]; 
+                                setBookings(n);
+                                syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                                triggerToast((bookings[key]?.status === 'maintenance' || bookings[key]?.status === 'resting') ? "Block cleared." : "Lane entry cleared.", "success");
+                            }
+                        });
+                    } else {
+                        setManualName(''); setManualPhone(''); setManualPayment('venue'); setManualScreenshot(null);
+                        setManualEntryType('booking');
+                        setManualEntryModal({ net, slot, date: selectedDate });
+                    }
+                    return;
+                }
+                
+                if (bookings[key] && bookings[key].status !== 'occupied') {
+                    if (bookings[key].email === currentUser?.email) return; 
+                    return; 
+                }
+                
+                const isS = selections.some(s => s.net === net && s.slot === slot);
+                if (isS) setSelections(selections.filter(s => !(s.net === net && s.slot === slot)));
+                else setSelections([...selections, { net, slot }]);
+            };
+
+            const toggleOccupy = (key) => {
+                const next = { ...bookings, [key]: { ...bookings[key], status: bookings[key].status === 'occupied' ? null : 'occupied' } };
+                setBookings(next);
+                syncToCloud({ bookings: next, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                triggerToast("Occupancy status toggled.", "success");
+            };
+
+            const togglePaymentStatus = (key, item) => {
+                if (userRole !== 'admin' && userRole !== 'superadmin') {
+                    return triggerToast("Permission Denied: Only Admins can verify payments.", "error");
+                }
+                
+                const nextBookings = { ...bookings };
+                const nextCredits = { ...userCredits };
+                const b = nextBookings[key];
+                
+                const isVerifying = b.paymentStatus !== 'verified';
+                b.paymentStatus = isVerifying ? 'verified' : 'pending';
+                b.verifiedBy = isVerifying ? currentUser?.name || 'System Admin' : null;
+                b.verifiedByRole = isVerifying ? userRole : null;
+
+                // Handle Package Quarantined Credits
+                if (b.type === 'package') {
+                    const tier = b.packageType || (b.title.toLowerCase().includes('weekday') ? 'weekday' : 'weekend');
+                    const sessions = b.sessions || parseInt(b.title, 10);
+                    const activeKey = b.email || getCleanPhone(b.phone);
+                    
+                    if (!nextCredits[activeKey]) {
+                        nextCredits[activeKey] = { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
+                    }
+                    
+                    if (isVerifying) {
+                        nextCredits[activeKey][tier] = (nextCredits[activeKey][tier] || 0) + sessions;
+                        nextCredits[activeKey][`${tier}Bought`] = (nextCredits[activeKey][`${tier}Bought`] || 0) + sessions;
+                        triggerToast("Payment Verified & Session Credits Released to user!", "success");
+                    } else {
+                        nextCredits[activeKey][tier] = Math.max(0, (nextCredits[activeKey][tier] || 0) - sessions);
+                        nextCredits[activeKey][`${tier}Bought`] = Math.max(0, (nextCredits[activeKey][`${tier}Bought`] || 0) - sessions);
+                        triggerToast("Payment status reverted. Credits revoked.", "success");
+                    }
+                } else {
+                    triggerToast(`Slot payment marked as ${b.paymentStatus}.`, "success");
+                }
+
+                setBookings(nextBookings);
+                setUserCredits(nextCredits);
+                syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+            };
+
+            const revertPayment = (key, item) => {
+                setConfirmModal({
+                    message: item.type === 'package' ? "Revert membership payment to Pending and revoke credits?" : "Revert lane payment to Pending?",
+                    onConfirm: async () => {
+                        const nextBookings = { ...bookings };
+                        const nextCredits = { ...userCredits };
+
+                        if (item.type === 'package' && item.paymentStatus === 'verified') {
+                            const tier = item.packageType || (item.title.toLowerCase().includes('weekday') ? 'weekday' : 'weekend');
+                            const sessions = item.sessions || parseInt(item.title, 10);
+                            const activeKey = item.email || getCleanPhone(item.phone);
+                            
+                            if (nextCredits[activeKey]) {
+                                nextCredits[activeKey][tier] = Math.max(0, (nextCredits[activeKey][tier] || 0) - sessions);
+                                nextCredits[activeKey][`${tier}Bought`] = Math.max(0, (nextCredits[activeKey][`${tier}Bought`] || 0) - sessions);
+                            }
+                        }
+
+                        if(nextBookings[key]) {
+                            nextBookings[key].paymentStatus = 'pending';
+                            nextBookings[key].verifiedBy = null;
+                            nextBookings[key].verifiedByRole = null;
+                        }
+
+                        setBookings(nextBookings);
+                        if(item.type === 'package') setUserCredits(nextCredits);
+                        await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                        triggerToast("Payment status reverted.", "success");
+                    }
+                });
+            };
+
+            const deleteRevenueRecord = (key, item) => {
+                setConfirmModal({
+                    message: "Permanently delete this transaction? (If it's a verified package, credits will be revoked).",
+                    onConfirm: async () => {
+                        const nextBookings = { ...bookings };
+                        const nextCredits = { ...userCredits };
+
+                        if (item.type === 'package' && item.paymentStatus === 'verified') {
+                            const tier = item.packageType || (item.title.toLowerCase().includes('weekday') ? 'weekday' : 'weekend');
+                            const sessions = item.sessions || parseInt(item.title, 10);
+                            const activeKey = item.email || getCleanPhone(item.phone);
+                            
+                            if (nextCredits[activeKey]) {
+                                nextCredits[activeKey][tier] = Math.max(0, (nextCredits[activeKey][tier] || 0) - sessions);
+                                nextCredits[activeKey][`${tier}Bought`] = Math.max(0, (nextCredits[activeKey][`${tier}Bought`] || 0) - sessions);
+                            }
+                        }
+
+                        delete nextBookings[key];
+
+                        setBookings(nextBookings);
+                        if(item.type === 'package') setUserCredits(nextCredits);
+                        await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                        triggerToast("Record deleted successfully.", "success");
+                    }
+                });
+            };
+
+            const handleScreenshotUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    // Limit file size or just compress to a flag to prevent DB overflow if needed
+                    const reader = new FileReader();
+                    reader.onloadend = () => setScreenshotPreview(reader.result); // Base64 for the ticket
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const finalizeBooking = async () => {
+                setIsProcessing(true);
+                const now = new Date();
+                const ticketNo = `SD-${now.getTime().toString().slice(-6)}`;
+                const cleanPhone = getCleanPhone(currentUser?.phone || '');
+                
+                setTimeout(async () => {
+                    const newTicket = {
+                        ticketNo, bookedBy: currentUser.name, role: currentUser.type.toUpperCase(),
+                        dateOfBooking: now.toLocaleDateString('en-IN'), timeOfBooking: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                        trainingDate: selectedDate, details: selections.map(s => ({ net: s.net, slot: s.slot })),
+                        paymentStatus: paymentMethod === 'upi' ? 'Verification Pending' : ((paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 'Paid via Credits' : 'Pay at Ground'),
+                        amount: finalPayable, verificationImage: screenshotPreview
+                    };
+
+                    const nextBookings = { ...bookings };
+                    let nextCredits = { ...userCredits };
+
+                    if (selectedPackage) {
+                        const tier = selectedPackage.type; 
+                        
+                        // Quarantined Credit Logic for Packages
+                        const isVerified = (paymentMethod !== 'upi' && paymentMethod !== 'venue');
+                        
+                        if (isVerified) {
+                            if (!nextCredits[currentUser.email]) nextCredits[currentUser.email] = { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
+                            nextCredits[currentUser.email][tier] = (nextCredits[currentUser.email][tier] || 0) + selectedPackage.sessions;
+                            nextCredits[currentUser.email][`${tier}Bought`] = (nextCredits[currentUser.email][`${tier}Bought`] || 0) + selectedPackage.sessions;
+                            triggerToast("Package added to account credits successfully!", "success");
+                        } else {
+                            triggerToast("Package queued! Credits will activate once Admin verifies payment.", "success");
+                        }
+
+                        const pkgKey = `pkg-${currentUser.email}-${Date.now()}`;
+                        nextBookings[pkgKey] = {
+                            type: 'package',
+                            title: selectedPackage.title,
+                            priceAtBooking: selectedPackage.price,
+                            paymentMode: paymentMethod,
+                            paymentStatus: isVerified ? 'verified' : 'pending',
+                            email: currentUser.email,
+                            phone: cleanPhone,
+                            sessions: selectedPackage.sessions,
+                            packageType: tier,
+                            date: now.toLocaleDateString('en-IN'),
+                            time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                            bookingDate: now.toLocaleDateString('en-IN'),
+                            bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                        };
+                    } else {
+                        // Slot Booking Logic
+                        if (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') {
+                            const uo = { ...nextCredits[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
+                            let rem = selections.length;
+                            if (paymentMethod === 'weekend_credits') {
+                                const used = Math.min(uo.weekend || 0, rem);
+                                uo.weekend = Math.max(0, (uo.weekend || 0) - used);
+                                uo.weekendUsed = (uo.weekendUsed || 0) + used;
+                            } else {
+                                const used = Math.min(uo.weekday || 0, rem);
+                                uo.weekday = Math.max(0, (uo.weekday || 0) - used);
+                                uo.weekdayUsed = (uo.weekdayUsed || 0) + used;
+                            }
+                            nextCredits[currentUser.email] = uo;
+                        }
+                        
+                        const isVerified = (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits');
+
+                        selections.forEach(s => { 
+                            nextBookings[`${selectedDate}-${s.net}-${s.slot}`] = { 
+                                type: 'user', user: currentUser.name, email: currentUser.email, phone: cleanPhone,
+                                priceAtBooking: isVerified ? 0 : (slotPrices[s.slot] || 500), 
+                                paymentMode: paymentMethod, paymentStatus: isVerified ? 'verified' : 'pending',
+                                date: selectedDate, slot: s.slot, net: s.net, status: null,
+                                // Avoid huge payload in DB, replace base64 with flag
+                                verificationImage: screenshotPreview ? "UPLOADED" : null,
+                                bookingDate: now.toLocaleDateString('en-IN'),
+                                bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                            }; 
+                        });
+                        triggerToast("Nets reserved successfully!", "success");
+                    }
+                    
+                    setBookings(nextBookings);
+                    setUserCredits(nextCredits);
+                    await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                    
+                    setTicketData(newTicket); setIsProcessing(false); setIsSuccess(true); setSelections([]); setSelectedPackage(null); setShowPayment(false); setScreenshotPreview(null);
+                }, 1500);
+            };
+
             const finalizeManualBooking = async () => {
                 const { net, slot, date } = manualEntryModal;
                 const key = `${date}-${net}-${slot}`;
-                const nextBookings = { ...bookings };
-                const nextCredits = { ...userCredits };
-                let nextContacts = { ...allContacts };
                 
                 if (manualEntryType === 'maintenance' || manualEntryType === 'resting') {
-                    nextBookings[key] = { 
+                    const next = { ...bookings, [key]: { 
                         type: 'system', status: manualEntryType,
                         user: manualEntryType === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
                         date: date, slot: slot, net: net, 
                         bookingDate: new Date().toLocaleDateString('en-IN'),
                         bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                    };
-                    setBookings(nextBookings);
-                    await syncToCloud({ bookings: nextBookings, allContacts: nextContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                    }};
+                    setBookings(next);
+                    await syncToCloud({ bookings: next, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                     triggerToast(manualEntryType === 'resting' ? "Slot locked for resting hours." : "Slot locked for maintenance.", "success");
                     setManualEntryModal(null);
                     return;
                 }
+
+                let price = manualPayment === 'credits' ? 0 : (slotPrices[slot] || 500);
+                const isVerified = (manualPayment === 'credits');
                 
-                let price = manualPayment === 'credits' ? 0 : (activeSlotPrices[slot] || 500);
-                
-                nextBookings[key] = { 
-                    type: 'user', user: manualName, phone: manualPhone, 
-                    priceAtBooking: price, paymentMode: manualPayment, 
-                    paymentStatus: (manualPayment === 'upi' || manualPayment === 'venue') ? 'pending' : 'verified',
-                    verificationImage: manualScreenshot ? 'Uploaded' : null,
+                const nextBookings = { ...bookings, [key]: { 
+                    type: 'user', user: manualName, phone: manualPhone, priceAtBooking: price, 
+                    paymentMode: manualPayment, paymentStatus: isVerified ? 'verified' : 'pending',
+                    verificationImage: manualScreenshot ? "UPLOADED" : null,
                     date: date, slot: slot, net: net, status: null,
                     bookingDate: new Date().toLocaleDateString('en-IN'),
                     bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                };
+                }};
 
+                let nextCredits = { ...userCredits };
                 if (manualPayment === 'credits') {
                     const cleanPhone = getCleanPhone(manualPhone);
-                    let match = nextContacts[cleanPhone] || Object.values(nextContacts).find(c => c.phone && (c.phone.endsWith(cleanPhone) || cleanPhone.endsWith(c.phone)));
+                    let match = allContacts[cleanPhone] || Object.values(allContacts).find(c => c.phone && (c.phone.endsWith(cleanPhone) || cleanPhone.endsWith(c.phone)));
                     if (match) {
                         const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
                         const eKey = match.email;
@@ -987,6 +1018,7 @@
                     }
                 }
 
+                let nextContacts = { ...allContacts };
                 const cleanManualPhone = getCleanPhone(manualPhone);
                 let checkMatch = nextContacts[cleanManualPhone] || Object.values(nextContacts).find(c => c.phone && (c.phone.endsWith(cleanManualPhone) || cleanManualPhone.endsWith(c.phone)));
                 if (!checkMatch) {
@@ -996,23 +1028,24 @@
                 setBookings(nextBookings);
                 setUserCredits(nextCredits);
                 setAllContacts(nextContacts);
-                await syncToCloud({ bookings: nextBookings, allContacts: nextContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                await syncToCloud({ bookings: nextBookings, allContacts: nextContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+
                 triggerToast("Manual booking added successfully!", "success");
                 setManualEntryModal(null);
             };
 
             if (!isAppReady) {
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-green-600">
-                        <div className="w-16 h-16 border-4 border-gray-200 border-t-green-600 rounded-full animate-spin mb-4"></div>
-                        <h2 className="text-2xl font-black uppercase tracking-widest text-gray-900">Syncing Matrix...</h2>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-2">Connecting to Secure Database</p>
+                    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
+                        <div className="w-16 h-16 border-4 border-slate-800 border-t-green-500 rounded-full animate-spin mb-6"></div>
+                        <h2 className="text-2xl font-black uppercase tracking-[0.2em] animate-pulse">Syncing Matrix</h2>
                     </div>
                 );
             }
 
             return (
                 <div className="min-h-screen flex flex-col text-left">
+                    {/* Toast Notification */}
                     {toast && (
                         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[500] px-6 py-4 rounded-2xl shadow-xl font-bold flex items-center gap-3 animate-up text-white no-print ${toast.type === 'error' ? 'bg-red-600' : 'bg-slate-900'}`}>
                             {toast.type === 'error' ? <Icon name="x" className="w-5 h-5"/> : <Icon name="check-circle-2" className="w-5 h-5"/>}
@@ -1020,6 +1053,7 @@
                         </div>
                     )}
 
+                    {/* Universal Confirmation Modal */}
                     {confirmModal && (
                         <div className="fixed inset-0 z-[800] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm no-print">
                             <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-up border text-center">
@@ -1036,6 +1070,7 @@
                         </div>
                     )}
 
+                    {/* Facility Operations & Maintenance Bulk Modal */}
                     {showFacilityControls && (
                         <div className="fixed inset-0 z-[750] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1048,6 +1083,7 @@
                                 </div>
 
                                 <div className="p-6 md:p-8 overflow-y-auto no-scrollbar flex-1 space-y-6">
+                                    {/* Date Range Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">1. Select Date Range</p>
                                         <div className="flex gap-4">
@@ -1062,6 +1098,7 @@
                                         </div>
                                     </div>
 
+                                    {/* Scope Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">2. Select Target Area</p>
                                         <div className="flex bg-gray-100 p-1.5 rounded-2xl">
@@ -1070,6 +1107,7 @@
                                         </div>
                                     </div>
 
+                                    {/* Nets Selection (If Scope is Nets) */}
                                     {controlScope === 'nets' && (
                                         <div className="animate-in fade-in slide-in-from-top-2">
                                             <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">Select Lanes to Block</p>
@@ -1089,6 +1127,7 @@
                                         </div>
                                     )}
 
+                                    {/* Duration Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">3. Select Duration</p>
                                         <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1120,6 +1159,7 @@
                                         )}
                                     </div>
 
+                                    {/* Reason Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">4. Select Reason</p>
                                         <div className="flex bg-gray-100 p-1.5 rounded-2xl">
@@ -1148,15 +1188,16 @@
                         </div>
                     )}
 
+                    {/* Super Admin Edit Password Modal */}
                     {editPasswordModal && (
                         <div className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                            <form onSubmit={async (e) => {
+                            <form onSubmit={(e) => {
                                 e.preventDefault();
                                 const val = e.target.new_pass.value;
                                 if (editPasswordModal.type === 'contact') {
                                     const nextContacts = { ...allContacts, [editPasswordModal.id]: { ...allContacts[editPasswordModal.id], password: val }};
                                     setAllContacts(nextContacts);
-                                    await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                                    syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                                     triggerToast("User password updated successfully.", "success");
                                 } else if (editPasswordModal.type === 'system_new') {
                                     const roleType = e.target.sys_role.value;
@@ -1164,17 +1205,23 @@
                                     const nextCodes = {
                                         ...systemCodes,
                                         [newKey]: {
-                                            code: val.toLowerCase(), phone: e.target.sys_phone.value,
-                                            email: e.target.sys_email.value, name: e.target.sys_name.value, roleType: roleType
+                                            code: val.toLowerCase(),
+                                            phone: e.target.sys_phone.value,
+                                            email: e.target.sys_email.value,
+                                            name: e.target.sys_name.value,
+                                            roleType: roleType
                                         }
                                     };
                                     setSystemCodes(nextCodes);
-                                    await syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                                    syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                                     triggerToast("New system user added successfully.", "success");
                                 } else {
-                                    const nextCodes = { ...systemCodes, [editPasswordModal.id]: { ...systemCodes[editPasswordModal.id], code: val.toLowerCase(), phone: e.target.sys_phone.value, email: e.target.sys_email.value, name: (e.target.sys_name ? e.target.sys_name.value : editPasswordModal.sysName) } };
+                                    const newPhone = e.target.sys_phone.value;
+                                    const newEmail = e.target.sys_email.value;
+                                    const newName = e.target.sys_name ? e.target.sys_name.value : editPasswordModal.sysName;
+                                    const nextCodes = { ...systemCodes, [editPasswordModal.id]: { ...systemCodes[editPasswordModal.id], code: val.toLowerCase(), phone: newPhone, email: newEmail, name: newName } };
                                     setSystemCodes(nextCodes);
-                                    await syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                                    syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                                     triggerToast("System configuration updated successfully.", "success");
                                 }
                                 setEditPasswordModal(null);
@@ -1219,6 +1266,7 @@
                         </div>
                     )}
 
+                    {/* Admin Pricing Editor Modal (Includes Rainy Season Panel) */}
                     {showPricingModal && (userRole === 'admin' || userRole === 'superadmin') && (
                         <div className="fixed inset-0 z-[750] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1230,86 +1278,90 @@
                                     <button onClick={() => setShowPricingModal(false)} className="p-3 bg-white border border-green-200 text-green-600 rounded-full transition-all hover:bg-green-100"><Icon name="x" className="w-5 h-5"/></button>
                                 </div>
                                 <div className="p-6 md:p-8 overflow-y-auto no-scrollbar flex-1">
-                                    <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-4 shrink-0">
-                                        <button onClick={() => setSeasonTab('regular')} className={`flex-1 py-3 text-[11px] font-black uppercase rounded-xl transition-all ${seasonTab === 'regular' ? 'bg-white shadow text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Regular Season</button>
-                                        <button onClick={() => setSeasonTab('rainy')} className={`flex-1 py-3 text-[11px] font-black uppercase rounded-xl transition-all ${seasonTab === 'rainy' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Rainy Season</button>
-                                    </div>
-
-                                    {seasonTab === 'rainy' && (
-                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-6 flex gap-4 animate-in fade-in zoom-in-95">
-                                            <div className="flex-1">
-                                                <label className="block text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1.5">Start Date</label>
-                                                <input type="date" value={tempSeasonDates.start} onChange={(e) => setTempSeasonDates({...tempSeasonDates, start: e.target.value})} className="w-full bg-white border border-blue-200 p-2.5 rounded-xl font-bold text-xs outline-none focus:border-blue-500" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="block text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1.5">End Date</label>
-                                                <input type="date" value={tempSeasonDates.end} onChange={(e) => setTempSeasonDates({...tempSeasonDates, end: e.target.value})} className="w-full bg-white border border-blue-200 p-2.5 rounded-xl font-bold text-xs outline-none focus:border-blue-500" />
-                                            </div>
-                                        </div>
-                                    )}
-
                                     <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-6 shrink-0">
-                                        <button onClick={() => setPricingTab('slots')} className={`flex-1 py-3 text-[11px] font-black uppercase rounded-xl transition-all ${pricingTab === 'slots' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Hourly Slots</button>
-                                        <button onClick={() => setPricingTab('packages')} className={`flex-1 py-3 text-[11px] font-black uppercase rounded-xl transition-all ${pricingTab === 'packages' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Packages</button>
+                                        <button onClick={() => setPricingTab('slots')} className={`flex-1 py-3 text-[11px] font-black uppercase rounded-xl transition-all ${pricingTab === 'slots' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Regular Season</button>
+                                        <button onClick={() => setPricingTab('rainy')} className={`flex-1 py-3 text-[11px] font-black uppercase rounded-xl transition-all ${pricingTab === 'rainy' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Rainy Season <Icon name="cloud-snow" className="inline w-3 h-3 ml-1 mb-0.5"/></button>
+                                        <button onClick={() => setPricingTab('packages')} className={`flex-1 py-3 text-[11px] font-black uppercase rounded-xl transition-all ${pricingTab === 'packages' ? 'bg-white shadow text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}>Packages</button>
                                     </div>
 
-                                    {pricingTab === 'slots' ? (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {TIME_SLOTS.map(slot => {
-                                                const activeTempSlots = seasonTab === 'regular' ? tempPrices : tempRainyPrices;
-                                                const activeSetTempSlots = seasonTab === 'regular' ? setTempPrices : setTempRainyPrices;
-                                                return (
+                                    {pricingTab === 'rainy' ? (
+                                        <div className="space-y-6 animate-in fade-in">
+                                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                                <h4 className="text-[11px] font-black text-blue-900 uppercase tracking-widest mb-4">Set Rainy Season Dates</h4>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1.5">Start Date</label>
+                                                        <input type="date" value={tempSeasonDates.start} onChange={(e) => setTempSeasonDates({...tempSeasonDates, start: e.target.value})} className="w-full bg-white border border-blue-200 p-2.5 rounded-xl font-bold text-xs outline-none focus:border-blue-500" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1.5">End Date</label>
+                                                        <input type="date" value={tempSeasonDates.end} onChange={(e) => setTempSeasonDates({...tempSeasonDates, end: e.target.value})} className="w-full bg-white border border-blue-200 p-2.5 rounded-xl font-bold text-xs outline-none focus:border-blue-500" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="col-span-1 sm:col-span-2 text-center pb-2"><span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Rainy Slot Pricing Override</span></div>
+                                                {TIME_SLOTS.map(slot => (
                                                     <div key={slot} className="flex flex-col bg-gray-50 p-3 rounded-2xl border border-gray-100">
                                                         <label className="text-[10px] font-black uppercase text-gray-500 mb-1.5">{slot}</label>
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-gray-400 font-bold ml-2">₹</span>
                                                             <input 
                                                                 type="number" 
-                                                                className="w-full bg-white border border-gray-200 p-2 rounded-xl font-bold text-sm outline-none focus:border-green-500" 
-                                                                value={activeTempSlots[slot] || ''} 
-                                                                onChange={e => activeSetTempSlots({...activeTempSlots, [slot]: Number(e.target.value)})} 
+                                                                className="w-full bg-white border border-gray-200 p-2 rounded-xl font-bold text-sm outline-none focus:border-blue-500" 
+                                                                value={tempPrices[`rainy_${slot}`] || tempPrices[slot] || ''} 
+                                                                onChange={e => setTempPrices({...tempPrices, [`rainy_${slot}`]: Number(e.target.value)})} 
                                                             />
                                                         </div>
                                                     </div>
-                                                );
-                                            })}
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : pricingTab === 'slots' ? (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
+                                            {TIME_SLOTS.map(slot => (
+                                                <div key={slot} className="flex flex-col bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                                                    <label className="text-[10px] font-black uppercase text-gray-500 mb-1.5">{slot}</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-gray-400 font-bold ml-2">₹</span>
+                                                        <input 
+                                                            type="number" 
+                                                            className="w-full bg-white border border-gray-200 p-2 rounded-xl font-bold text-sm outline-none focus:border-green-500" 
+                                                            value={tempPrices[slot] || ''} 
+                                                            onChange={e => setTempPrices({...tempPrices, [slot]: Number(e.target.value)})} 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     ) : (
-                                        <div className="space-y-6">
+                                        <div className="space-y-6 animate-in fade-in">
                                             <div className="bg-white p-4 rounded-2xl border">
                                                 <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-widest mb-4">Weekday Packs</h4>
                                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    {[10, 30, 50].map(cnt => {
-                                                        const actPkg = seasonTab === 'regular' ? tempPkgPrices : tempRainyPkgPrices;
-                                                        const setActPkg = seasonTab === 'regular' ? setTempPkgPrices : setTempRainyPkgPrices;
-                                                        return (
-                                                            <div key={`wd-${cnt}`} className="flex flex-col bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                                                                <label className="text-[9px] font-black uppercase text-gray-500 mb-1.5">{cnt} Sessions</label>
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-gray-400 font-bold text-xs ml-1">₹</span>
-                                                                    <input type="number" className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-sm outline-none focus:border-green-500" value={actPkg.weekday[cnt] || ''} onChange={e => setActPkg({...actPkg, weekday: {...actPkg.weekday, [cnt]: Number(e.target.value)}})} />
-                                                                </div>
+                                                    {[10, 30, 50].map(cnt => (
+                                                        <div key={`wd-${cnt}`} className="flex flex-col bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                                                            <label className="text-[9px] font-black uppercase text-gray-500 mb-1.5">{cnt} Sessions</label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-gray-400 font-bold text-xs ml-1">₹</span>
+                                                                <input type="number" className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-sm outline-none focus:border-green-500" value={tempPkgPrices.weekday[cnt] || ''} onChange={e => setTempPkgPrices({...tempPkgPrices, weekday: {...tempPkgPrices.weekday, [cnt]: Number(e.target.value)}})} />
                                                             </div>
-                                                        );
-                                                    })}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                             <div className="bg-white p-4 rounded-2xl border">
                                                 <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-widest mb-4">Weekend Packs</h4>
                                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    {[10, 30, 50].map(cnt => {
-                                                        const actPkg = seasonTab === 'regular' ? tempPkgPrices : tempRainyPkgPrices;
-                                                        const setActPkg = seasonTab === 'regular' ? setTempPkgPrices : setTempRainyPkgPrices;
-                                                        return (
-                                                            <div key={`we-${cnt}`} className="flex flex-col bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                                                                <label className="text-[9px] font-black uppercase text-gray-500 mb-1.5">{cnt} Sessions</label>
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-gray-400 font-bold text-xs ml-1">₹</span>
-                                                                    <input type="number" className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-sm outline-none focus:border-green-500" value={actPkg.weekend[cnt] || ''} onChange={e => setActPkg({...actPkg, weekend: {...actPkg.weekend, [cnt]: Number(e.target.value)}})} />
-                                                                </div>
+                                                    {[10, 30, 50].map(cnt => (
+                                                        <div key={`we-${cnt}`} className="flex flex-col bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                                                            <label className="text-[9px] font-black uppercase text-gray-500 mb-1.5">{cnt} Sessions</label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-gray-400 font-bold text-xs ml-1">₹</span>
+                                                                <input type="number" className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-sm outline-none focus:border-green-500" value={tempPkgPrices.weekend[cnt] || ''} onChange={e => setTempPkgPrices({...tempPkgPrices, weekend: {...tempPkgPrices.weekend, [cnt]: Number(e.target.value)}})} />
                                                             </div>
-                                                        );
-                                                    })}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         </div>
@@ -1317,21 +1369,20 @@
                                 </div>
                                 <div className="p-6 md:p-8 pt-0 flex gap-4 shrink-0">
                                     <button onClick={() => setShowPricingModal(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 font-black rounded-2xl uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-colors">Cancel</button>
-                                    <button onClick={async () => { 
+                                    <button onClick={() => { 
                                         setSlotPrices(tempPrices); 
                                         setPackagePrices(tempPkgPrices); 
-                                        setSlotPricesRainy(tempRainyPrices);
-                                        setPackagePricesRainy(tempRainyPkgPrices);
                                         setSeasonDates(tempSeasonDates);
-                                        await syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices: tempPrices, blockedDays, packagePrices: tempPkgPrices, seasonDates: tempSeasonDates, slotPricesRainy: tempRainyPrices, packagePricesRainy: tempRainyPkgPrices });
+                                        syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices: tempPrices, blockedDays, packagePrices: tempPkgPrices, seasonDates: tempSeasonDates });
                                         setShowPricingModal(false); 
-                                        triggerToast("Pricing updated successfully!", "success"); 
+                                        triggerToast("Pricing & Seasons updated successfully!", "success"); 
                                     }} className="flex-1 py-4 bg-green-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-xl hover:bg-green-700 transition-all">Save Updates</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
+                    {/* Manual Entry Booking Modal for Admin/Staff */}
                     {manualEntryModal && (
                         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1379,11 +1430,12 @@
                                             <div className="grid grid-cols-3 gap-2 mb-4">
                                                 <button onClick={()=>setManualPayment('venue')} className={`p-3 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${manualPayment==='venue'?'border-green-600 bg-green-50 text-green-700':'border-gray-100 text-gray-500 hover:border-gray-300'}`}>Ground</button>
                                                 <button onClick={()=>setManualPayment('upi')} className={`p-3 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${manualPayment==='upi'?'border-green-600 bg-green-50 text-green-700':'border-gray-100 text-gray-500 hover:border-gray-300'}`}>UPI</button>
-                                                <button onClick={()=> canUseManualCredits ? setManualPayment('credits') : null} disabled={!canUseManualCredits} className={`p-3 rounded-xl border-2 text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center gap-0.5 ${manualPayment==='credits' ? 'border-green-600 bg-green-50 text-green-700' : (!canUseManualCredits ? 'border-gray-100 bg-gray-50 text-gray-400 opacity-50 cursor-not-allowed' : 'border-gray-100 text-gray-500 hover:border-green-200 hover:bg-green-50/50')}`}>
-                                                    <span>Credits</span>
-                                                    {isManualRainy && <span className="text-[7px] text-red-500 font-bold leading-none tracking-tighter">Rainy Block</span>}
+                                                <button onClick={()=> canUseManualCredits ? setManualPayment('credits') : null} disabled={!canUseManualCredits} className={`p-3 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${manualPayment==='credits' ? 'border-green-600 bg-green-50 text-green-700' : (!canUseManualCredits ? 'border-gray-100 bg-gray-50 text-gray-400 opacity-50 cursor-not-allowed' : 'border-gray-100 text-gray-500 hover:border-green-200 hover:bg-green-50/50')}`}>
+                                                    Credits
                                                 </button>
                                             </div>
+                                            
+                                            {isManualRainy && <p className="text-[9px] text-center text-red-500 font-bold uppercase tracking-widest mb-4">Credits disabled (Rainy Season)</p>}
 
                                             {manualPayment === 'upi' && (
                                                 <div className="p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-300 animate-up text-left mb-4">
@@ -1450,18 +1502,13 @@
                                 {userRole.toUpperCase()} OPERATIONS ACTIVE
                             </span>
                             {userRole === 'superadmin' && (
-                                <button onClick={forceSyncToCloud} className="flex items-center gap-1.5 bg-green-500 text-white px-3 py-1.5 rounded hover:bg-green-400 border border-green-400 transition-colors shadow-lg">
-                                    <Icon name="upload-cloud" className="w-3.5 h-3.5" /> FORCE SYNC
-                                </button>
-                            )}
-                            {userRole === 'superadmin' && (
                                 <button onClick={() => setShowRevenueAnalytics(true)} className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded hover:bg-white/30 border border-white/30 transition-colors">
                                     <Icon name="bar-chart-3" className="w-3.5 h-3.5" /> REVENUE
                                 </button>
                             )}
                             {(userRole === 'admin' || userRole === 'superadmin') && (
                                 <React.Fragment>
-                                    <button onClick={() => setShowPricingModal(true)} className="bg-white/20 px-3 py-1.5 rounded hover:bg-white/30 border border-white/30 transition-colors">PRICING</button>
+                                    <button onClick={() => { setTempPrices({ ...slotPrices }); setTempPkgPrices({ weekday: { ...packagePrices.weekday }, weekend: { ...packagePrices.weekend } }); setTempSeasonDates({ ...seasonDates }); setShowPricingModal(true); }} className="bg-white/20 px-3 py-1.5 rounded hover:bg-white/30 border border-white/30 transition-colors">PRICING</button>
                                     <button onClick={() => setShowContacts(true)} className="bg-white/20 px-3 py-1.5 rounded hover:bg-white/30 border border-white/30 transition-colors">CONTACTS</button>
                                     <button onClick={() => { setControlStartDate(selectedDate); setControlEndDate(selectedDate); setShowFacilityControls(true); }} className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded hover:bg-white/30 border border-white/30 transition-colors">
                                         <Icon name="wrench" className="w-3.5 h-3.5"/> OPS & MAINT
@@ -1470,6 +1517,11 @@
                             )}
                             <button onClick={() => setShowStaffBookings(true)} className="bg-white/20 px-3 py-1.5 rounded hover:bg-white/30 border border-white/30 transition-colors">MANIFEST</button>
                             <button onClick={() => setUserRole('user')} className="bg-red-500/80 px-3 py-1.5 rounded hover:bg-red-500 border border-red-500/50 transition-colors font-bold">EXIT</button>
+                            {userRole === 'superadmin' && (
+                                <button onClick={forceCloudSync} className="flex items-center gap-1.5 bg-green-500 text-white px-3 py-1.5 rounded hover:bg-green-400 font-bold ml-auto shadow shadow-green-500/30 transition-colors">
+                                    <Icon name="upload-cloud" className="w-3.5 h-3.5"/> FORCE SYNC
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -1501,18 +1553,16 @@
                                 <div>
                                     <h3 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-slate-900">Net Reservations</h3>
                                     <p className="text-gray-400 font-medium text-lg mt-2">Secure your lane and elevate your technical game.</p>
-                                    <div className="flex flex-wrap items-center gap-2 mt-3">
-                                        {isDateInRainySeason(selectedDate) && (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-black uppercase rounded tracking-widest border border-blue-200 shadow-sm animate-in fade-in">
-                                                <Icon name="upload-cloud" className="w-3.5 h-3.5"/> Rainy Season Active
-                                            </span>
-                                        )}
-                                        {blockedDays[selectedDate] && (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 text-[10px] font-black uppercase rounded tracking-widest border border-red-200 shadow-sm animate-in fade-in">
-                                                <Icon name="shield-alert" className="w-3.5 h-3.5"/> Holiday / Facility Blocked
-                                            </span>
-                                        )}
-                                    </div>
+                                    {blockedDays[selectedDate] && (
+                                        <span className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 bg-red-100 text-red-700 text-[10px] font-black uppercase rounded tracking-widest border border-red-200 shadow-sm animate-in fade-in">
+                                            <Icon name="shield-alert" className="w-3.5 h-3.5"/> Holiday / Facility Blocked
+                                        </span>
+                                    )}
+                                    {isRainySelected && (
+                                        <span className="inline-flex items-center gap-1.5 mt-3 ml-2 px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-black uppercase rounded tracking-widest border border-blue-200 shadow-sm animate-in fade-in">
+                                            <Icon name="cloud-snow" className="w-3.5 h-3.5"/> Rainy Season Active
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="w-full lg:w-auto flex flex-col items-end gap-3">
                                     <div className="w-full lg:w-auto flex flex-nowrap items-center gap-1.5 bg-white p-1.5 rounded-[2rem] border shadow-sm animate-up overflow-x-auto no-scrollbar">
@@ -1552,6 +1602,8 @@
                                                         const isMine = b && currentUser && b.email === currentUser.email;
                                                         let btnStyle = 'net-btn-available';
                                                         
+                                                        const activePrice = isRainySelected ? (slotPrices[`rainy_${slot}`] || slotPrices[slot] || 500) : (slotPrices[slot] || 500);
+
                                                         if (expired) btnStyle = 'bg-slate-50 text-slate-300 cursor-not-allowed';
                                                         else if (b?.status === 'maintenance') btnStyle = 'bg-orange-500 text-white border-orange-600 shadow-lg scale-[0.98]';
                                                         else if (b?.status === 'resting') btnStyle = 'bg-indigo-500 text-white border-indigo-600 shadow-lg scale-[0.98]';
@@ -1567,7 +1619,7 @@
                                                                     <span className="text-[10px] md:text-[11px] font-black uppercase leading-none tracking-tight text-center">
                                                                         {expired ? 'EXPIRED' : (b?.status === 'maintenance' ? 'MAINTENANCE' : (b?.status === 'resting' ? 'RESTING HOURS' : (b?.status === 'occupied' ? 'OCCUPIED' : (isMine ? 'YOUR SESSION' : (b ? 'BOOKED' : slot)))))}
                                                                     </span>
-                                                                    {!expired && !b && <span className="text-[11px] md:text-xs font-black text-green-700 mt-2 uppercase text-center">₹{activeSlotPrices[slot] || 500}</span>}
+                                                                    {!expired && !b && <span className="text-[11px] md:text-xs font-black text-green-700 mt-2 uppercase text-center">₹{activePrice}</span>}
                                                                 </div>
                                                             </button>
                                                         );
@@ -1584,34 +1636,32 @@
                     {/* Packages Section */}
                     <section id="packages" className="py-20 px-6 bg-gray-50 border-t border-gray-100 text-center">
                         <div className="max-w-7xl mx-auto">
-                            <h3 className="text-4xl font-black text-gray-900 tracking-tight uppercase text-center mb-1">Membership Packages</h3>
-                            <p className="text-[11px] font-black uppercase text-red-500 tracking-widest mt-2 mb-10 text-center">(Membership Packages are not valid in rainy season)</p>
+                            <h3 className="text-4xl font-black text-gray-900 tracking-tight uppercase mb-2 text-center">Membership Packages</h3>
+                            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-8 text-center">(Membership Packages are not valid in rainy season)</p>
                             
                             {isTodayRainy ? (
-                                <div className="py-16 bg-white rounded-[3rem] border border-red-100 shadow-xl max-w-3xl mx-auto text-center animate-in fade-in zoom-in-95">
-                                    <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <Icon name="upload-cloud" className="w-10 h-10"/>
+                                <div className="bg-blue-50 border border-blue-200 p-8 rounded-[2rem] text-center max-w-2xl mx-auto shadow-sm animate-in fade-in zoom-in-95">
+                                    <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Icon name="cloud-snow" className="w-8 h-8" />
                                     </div>
-                                    <h4 className="text-3xl font-black text-gray-900 mb-3 uppercase tracking-tight">Purchases Paused</h4>
-                                    <p className="text-base font-bold text-gray-500 max-w-md mx-auto leading-relaxed">
-                                        Membership packages cannot be purchased or consumed during the active Rainy Season. Please check back when regular season resumes.
-                                    </p>
+                                    <h4 className="text-xl font-black text-blue-900 mb-2 uppercase tracking-widest">Purchases Suspended</h4>
+                                    <p className="text-sm font-bold text-blue-700 max-w-md mx-auto">Membership packages cannot be purchased or used during the active Rainy Season. Please check back later!</p>
                                 </div>
                             ) : (
                                 <React.Fragment>
-                                    <div className="inline-flex bg-white p-1.5 rounded-full shadow-sm border border-gray-200 mb-12 mx-auto">
+                                    <div className="inline-flex bg-white p-1.5 rounded-full shadow-sm border border-gray-200 mb-12 mx-auto animate-in fade-in">
                                         <button onClick={() => setPkgView('weekday')} className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${pkgView === 'weekday' ? 'bg-green-600 text-white shadow-md' : 'text-gray-500'}`}>Weekday Pack</button>
-                                        <button onClick={() => setPkgView('weekend')} className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${pkgView === 'weekend' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500'}`}>Weekend Pack (All 7 Days)</button>
+                                        <button onClick={() => setPkgView('weekend')} className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${pkgView === 'weekend' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500'}`}>Weekend Pack</button>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-left">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-left animate-in fade-in">
                                         {[10, 30, 50].map(cnt => (
                                             <div key={cnt} className="bg-white rounded-[2.5rem] p-8 border border-gray-200 shadow-xl flex flex-col transition-all hover:-translate-y-1 h-full min-h-[320px]">
                                                 <div className="flex-grow">
                                                     <h4 className="text-2xl font-black text-gray-900 mb-1 leading-none">{cnt} Sessions</h4>
                                                     <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-6">{pkgView === 'weekday' ? 'Valid Mon-Fri except rainy season' : 'Valid all days except rainy season'}</p>
-                                                    <div className="text-4xl font-black text-gray-900 mb-8">₹{activePackagePrices[pkgView][cnt]}</div>
+                                                    <div className="text-4xl font-black text-gray-900 mb-8">₹{packagePrices[pkgView][cnt]}</div>
                                                 </div>
-                                                <button onClick={() => { setSelectedPackage({ sessions: cnt, title: `${cnt} ${pkgView.toUpperCase()} Pack`, price: activePackagePrices[pkgView][cnt], type: pkgView }); setShowPayment(true); }} 
+                                                <button onClick={() => { setSelectedPackage({ sessions: cnt, title: `${cnt} ${pkgView.toUpperCase()} Pack`, price: packagePrices[pkgView][cnt], type: pkgView }); setShowPayment(true); }} 
                                                     className="w-full py-4 bg-gray-900 text-white font-black rounded-2xl hover:bg-green-600 transition-all tracking-widest text-[10px] uppercase text-center mt-auto">
                                                     Purchase Now
                                                 </button>
@@ -1625,27 +1675,22 @@
 
                     {/* Selected Booking Checkout Bar */}
                     {selections.length > 0 && userRole === 'user' && !showPayment && (
-                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm no-print animate-in fade-in">
-                            <div className="w-full max-w-md bg-white p-8 rounded-[3rem] shadow-2xl border border-gray-200 flex flex-col items-center justify-center gap-6 animate-up text-center relative">
-                                <button onClick={() => setSelections([])} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
-                                    <Icon name="x" className="w-5 h-5"/>
-                                </button>
-                                <div className="w-full text-center mt-2">
-                                    <p className="text-[10px] font-black uppercase text-gray-400 mb-1 tracking-widest text-center">Review Selections</p>
-                                    <p className="text-3xl md:text-4xl font-black text-gray-900 leading-none text-center">₹{selectionTotal}</p>
-                                    <p className="text-[10px] md:text-xs font-bold text-green-600 uppercase mt-2 tracking-widest text-center">{selections.length} Hours Selected</p>
-                                    <div className="mt-4 flex flex-wrap justify-center gap-2 max-h-[120px] overflow-y-auto no-scrollbar py-1">
-                                        {selections.map((s, idx) => (
-                                            <span key={idx} className="bg-slate-50 text-slate-500 px-3 py-1 rounded-full text-[9px] font-black border border-slate-100 uppercase tracking-tighter shadow-sm">
-                                                {s.net}: {s.slot}
-                                            </span>
-                                        ))}
-                                    </div>
+                        <div className="fixed bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 w-[94%] max-w-xl bg-white p-8 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl border border-gray-200 flex flex-col items-center justify-center gap-6 animate-up z-50 text-center no-print">
+                            <div className="w-full text-center">
+                                <p className="text-[10px] font-black uppercase text-gray-400 mb-1 tracking-widest text-center">Review Selections</p>
+                                <p className="text-3xl md:text-4xl font-black text-gray-900 leading-none text-center">₹{selectionTotal}</p>
+                                <p className="text-[10px] md:text-xs font-bold text-green-600 uppercase mt-2 tracking-widest text-center">{selections.length} Hours Selected</p>
+                                <div className="mt-4 flex flex-wrap justify-center gap-2 max-h-[120px] overflow-y-auto no-scrollbar py-1">
+                                    {selections.map((s, idx) => (
+                                        <span key={idx} className="bg-slate-50 text-slate-500 px-3 py-1 rounded-full text-[9px] font-black border border-slate-100 uppercase tracking-tighter shadow-sm">
+                                            {s.net}: {s.slot}
+                                        </span>
+                                    ))}
                                 </div>
-                                <button onClick={() => { if(currentUser) { setShowPayment(true); } else { setShowUserLogin(true); } }} className="w-full px-12 py-4 bg-green-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-green-100 hover:bg-green-700 transition-all flex items-center justify-center gap-3">
-                                    Review & Book <Icon name="lock" className="w-4 h-4" />
-                                </button>
                             </div>
+                            <button onClick={() => { if(currentUser) { setShowPayment(true); } else { setShowUserLogin(true); } }} className="w-full sm:w-auto px-12 py-4 bg-green-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-green-100 hover:bg-green-700 transition-all flex items-center justify-center gap-3">
+                                Review & Book <Icon name="lock" className="w-4 h-4" />
+                            </button>
                         </div>
                     )}
 
@@ -1881,7 +1926,6 @@
                                                 <p className="text-center py-8 text-gray-400 font-bold text-xs uppercase tracking-widest">No revenue generated in this range</p>
                                             ) : (
                                                 <React.Fragment>
-                                                    {/* Screen View (Cards) */}
                                                     <div className="space-y-3 print:hidden">
                                                         {revenueStats.selectedDateBreakdown.map((item, idx) => (
                                                             <div key={idx} className="print-break-avoid flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-2xl bg-gray-50/50 gap-2 hover:bg-gray-50 transition-colors">
@@ -1894,18 +1938,34 @@
                                                                         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{item.parsedDate} • {item.type === 'package' ? 'Membership Purchase' : item.slot} • {item.paymentMode}</span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="text-left sm:text-right pl-13 sm:pl-0">
-                                                                    <span className="text-sm font-black text-slate-800 block">₹{item.priceAtBooking}</span>
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{item.user || item.email || item.phone}</span>
-                                                                    {item.paymentStatus === 'verified' && item.verifiedBy && (
-                                                                        <span className="text-[8px] font-black text-emerald-600 uppercase block mt-1 text-left sm:text-right">Verified by: {item.verifiedBy} ({item.verifiedByRole})</span>
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                                                    <div className="text-left sm:text-right pl-13 sm:pl-0">
+                                                                        <span className="text-sm font-black text-slate-800 block">₹{item.priceAtBooking}</span>
+                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{item.user || item.email || item.phone}</span>
+                                                                        {item.paymentStatus === 'verified' && item.verifiedBy && (
+                                                                            <span className="text-[8px] font-black text-emerald-600 uppercase block mt-1 text-left sm:text-right">Verified by: {item.verifiedBy}</span>
+                                                                        )}
+                                                                        {(item.paymentMode === 'upi' || item.paymentMode === 'venue') && item.paymentStatus !== 'verified' && (
+                                                                            <span className="text-[8px] font-black text-yellow-600 uppercase block mt-1 text-left sm:text-right">Payment Pending</span>
+                                                                        )}
+                                                                    </div>
+                                                                    {userRole === 'superadmin' && (
+                                                                        <div className="flex flex-wrap sm:flex-col justify-end gap-2 mt-2 sm:mt-0 border-t sm:border-t-0 sm:border-l border-gray-200 pt-3 sm:pt-0 sm:pl-4 no-print">
+                                                                            {(item.paymentMode === 'upi' || item.paymentMode === 'venue') && item.paymentStatus === 'verified' && (
+                                                                                <button onClick={() => revertPayment(item.key, item)} className="px-3 py-1.5 bg-yellow-50 text-yellow-700 hover:bg-yellow-500 hover:text-white border border-yellow-200 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors shadow-sm">
+                                                                                    Un-Verify
+                                                                                </button>
+                                                                            )}
+                                                                            <button onClick={() => deleteRevenueRecord(item.key, item)} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors shadow-sm">
+                                                                                Delete
+                                                                            </button>
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                             </div>
                                                         ))}
                                                     </div>
                                                     
-                                                    {/* Print View (Simple List/Table) */}
                                                     <div className="hidden print:block w-full mt-4">
                                                         <table className="w-full text-left text-xs border-collapse">
                                                             <thead>
@@ -1914,6 +1974,7 @@
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px]">Description</th>
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px]">Contact Info</th>
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px]">Method</th>
+                                                                    <th className="py-2 font-black uppercase tracking-widest text-[10px]">Status</th>
                                                                     <th className="py-2 font-black uppercase tracking-widest text-[10px] text-right">Amount</th>
                                                                 </tr>
                                                             </thead>
@@ -1928,11 +1989,13 @@
                                                                             <span className="font-bold text-gray-900 uppercase block">{item.type === 'package' ? item.title : `Lane Booking: ${item.net}`}</span>
                                                                             <span className="text-[9px] text-gray-500 uppercase block mt-0.5">{item.type}</span>
                                                                         </td>
+                                                                        <td className="py-3">
+                                                                            <span className="font-bold text-gray-700 block">{item.user || '-'}</span>
+                                                                            <span className="text-[9px] text-gray-500 block mt-0.5">{item.email || item.phone}</span>
+                                                                        </td>
+                                                                        <td className="py-3 font-bold text-gray-600 uppercase">{item.paymentMode}</td>
                                                                         <td className="py-3 font-bold text-gray-600 uppercase">
-                                                                            {item.paymentMode}
-                                                                            {item.paymentStatus === 'verified' && item.verifiedBy && (
-                                                                                <span className="block text-[8px] text-emerald-600 mt-0.5 tracking-wider">Verified: {item.verifiedBy} ({item.verifiedByRole})</span>
-                                                                            )}
+                                                                            {item.paymentStatus === 'verified' ? `Verified by ${item.verifiedBy || 'Admin'}` : 'Pending'}
                                                                         </td>
                                                                         <td className="py-3 font-black text-gray-900 text-right">₹{item.priceAtBooking}</td>
                                                                     </tr>
@@ -2025,7 +2088,8 @@
                                                                             <button onClick={() => setConfirmModal({
                                                                                 message: `Revoke all access for ${dispName}?`,
                                                                                 onConfirm: () => {
-                                                                                    setSystemCodes(prev => { const n = {...prev}; delete n[role]; return n; });
+                                                                                    const n = {...systemCodes}; delete n[role]; setSystemCodes(n);
+                                                                                    syncToCloud({ bookings, allContacts, systemCodes: n, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                                                                                     triggerToast("System user removed.", "success");
                                                                                 }
                                                                             })} className="text-[9px] font-black uppercase text-red-600 hover:text-red-800 tracking-widest bg-red-50 px-3 py-1.5 rounded-lg no-print transition-colors hover:bg-red-100">Delete</button>
@@ -2039,7 +2103,6 @@
                                                 })}
                                             </div>
                                             
-                                            {/* Table View specifically tailored for Printing */}
                                             <div className="hidden print:block w-full mt-4">
                                                 <table className="w-full text-left text-xs border-collapse">
                                                     <thead>
@@ -2077,7 +2140,7 @@
                                             <React.Fragment>
                                                 <div className="grid gap-4 md:grid-cols-2 print:hidden">
                                                     {filteredContacts.map(([phone, user]) => {
-                                                        const bal = (user.email && userCredits[user.email]) ? userCredits[user.email] : (userCredits[phone] || { weekday: 0, weekend: 0 });
+                                                        const bal = user.email ? (userCredits[user.email] || {weekday:0, weekend:0}) : (userCredits[getCleanPhone(user.phone)] || {weekday:0, weekend:0});
                                                         return (
                                                             <div key={phone} className="print-break-avoid bg-white p-5 rounded-2xl border shadow-sm flex flex-col gap-4">
                                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2104,13 +2167,13 @@
                                                                     </div>
                                                                 </div>
                                                                 
-                                                                <div className="flex gap-2 border-t pt-3">
-                                                                    <div className="flex-1 bg-green-50 p-2 rounded-lg text-center border border-green-100">
-                                                                        <span className="block text-[8px] font-black uppercase tracking-widest text-green-700">WD Credits</span>
+                                                                <div className="flex gap-2">
+                                                                    <div className="flex-1 bg-green-50 border border-green-100 rounded-lg p-2 text-center">
+                                                                        <span className="block text-[8px] font-black text-green-600 uppercase tracking-widest">WD Credits</span>
                                                                         <span className="block text-sm font-black text-green-900">{bal.weekday || 0}</span>
                                                                     </div>
-                                                                    <div className="flex-1 bg-purple-50 p-2 rounded-lg text-center border border-purple-100">
-                                                                        <span className="block text-[8px] font-black uppercase tracking-widest text-purple-700">WE Credits</span>
+                                                                    <div className="flex-1 bg-purple-50 border border-purple-100 rounded-lg p-2 text-center">
+                                                                        <span className="block text-[8px] font-black text-purple-600 uppercase tracking-widest">WE Credits</span>
                                                                         <span className="block text-sm font-black text-purple-900">{bal.weekend || 0}</span>
                                                                     </div>
                                                                 </div>
@@ -2125,11 +2188,10 @@
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                        );
+                                                        )
                                                     })}
                                                 </div>
 
-                                                {/* Print-only simple list view for End User Contacts */}
                                                 <div className="hidden print:block w-full mt-4">
                                                     <table className="w-full text-left text-sm border-collapse border border-gray-300">
                                                         <thead>
@@ -2137,22 +2199,22 @@
                                                                 <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Name</th>
                                                                 <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Role</th>
                                                                 <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Phone</th>
-                                                                <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300 text-center">WD / WE</th>
+                                                                <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Credits (WD/WE)</th>
                                                                 {userRole === 'superadmin' && <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Password</th>}
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             {filteredContacts.map(([phone, user]) => {
-                                                                const bal = (user.email && userCredits[user.email]) ? userCredits[user.email] : (userCredits[phone] || { weekday: 0, weekend: 0 });
+                                                                const bal = user.email ? (userCredits[user.email] || {weekday:0, weekend:0}) : (userCredits[getCleanPhone(user.phone)] || {weekday:0, weekend:0});
                                                                 return (
                                                                     <tr key={`print-${phone}`} className="border-b border-gray-300 print-break-avoid">
                                                                         <td className="p-3 border border-gray-300 font-bold text-gray-900 uppercase">{user.name}</td>
                                                                         <td className="p-3 border border-gray-300 font-bold text-gray-500 uppercase">{user.type}</td>
                                                                         <td className="p-3 border border-gray-300 font-bold text-gray-700">{user.phone}</td>
-                                                                        <td className="p-3 border border-gray-300 font-black text-gray-700 text-center">{bal.weekday || 0} / {bal.weekend || 0}</td>
+                                                                        <td className="p-3 border border-gray-300 font-bold text-gray-700">{bal.weekday || 0} / {bal.weekend || 0}</td>
                                                                         {userRole === 'superadmin' && <td className="p-3 border border-gray-300 font-mono font-black text-gray-600">{user.password || 'Unset'}</td>}
                                                                     </tr>
-                                                                );
+                                                                )
                                                             })}
                                                         </tbody>
                                                     </table>
@@ -2168,38 +2230,36 @@
                     {/* Staff Manifest Viewer Modal */}
                     {showStaffBookings && userRole !== 'user' && (
                         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md px-4">
-                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col border max-h-[85vh] text-left">
+                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col border max-h-[85vh] text-left">
                                 <div className="p-8 border-b flex justify-between items-center bg-gray-50 shrink-0">
-                                    <div className="text-left"><h3 className="text-2xl font-black text-gray-900 uppercase">Facility Manifest</h3><p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 text-left">{new Date(selectedDate).toDateString()}</p></div>
+                                    <div className="text-left"><h3 className="text-2xl font-black text-gray-900 uppercase">Daily Manifest</h3><p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 text-left">{new Date(selectedDate).toDateString()}</p></div>
                                     <button onClick={() => setShowStaffBookings(false)} className="p-3 bg-white border border-gray-200 text-onyx rounded-full transition-all hover:bg-gray-100"><Icon name="x" className="w-5 h-5"/></button>
                                 </div>
-                                <div id="manifest-area" className="p-6 md:p-8 overflow-y-auto no-scrollbar bg-white flex-1 text-left">
+                                <div id="manifest-area" className="p-8 overflow-y-auto no-scrollbar bg-white flex-1 text-left">
                                     
-                                    {/* NEW: Pending Packages Section */}
-                                    {pendingPackages.length > 0 && (
-                                        <div className="mb-8 bg-purple-50 p-6 rounded-[2rem] border border-purple-100 animate-in fade-in">
-                                            <h4 className="text-[11px] font-black uppercase text-purple-900 tracking-widest mb-4 flex items-center gap-2">
-                                                <Icon name="award" className="w-5 h-5"/> Pending Membership Approvals
-                                            </h4>
+                                    {/* Pending Memberships Section */}
+                                    {pendingPackagesList.length > 0 && (
+                                        <div className="mb-8 bg-purple-50 p-5 rounded-3xl border border-purple-100">
+                                            <h4 className="text-[10px] font-black text-purple-800 uppercase tracking-widest mb-4 flex items-center gap-2"><Icon name="shield-alert" className="w-4 h-4"/> Pending Memberships</h4>
                                             <div className="space-y-3">
-                                                {pendingPackages.map((item) => (
-                                                    <div key={item.key} className="p-4 bg-white border border-purple-100 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                                                {pendingPackagesList.map((item, idx) => (
+                                                    <div key={idx} className="bg-white p-4 rounded-2xl border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                         <div>
                                                             <div className="flex items-center gap-2 mb-1">
-                                                                <span className="px-2 py-0.5 bg-purple-600 text-white text-[9px] font-black rounded uppercase">{item.tier} Pack</span>
-                                                                <span className="text-xs font-black uppercase text-purple-900">{item.sessions} Sessions</span>
+                                                                <span className="px-2 py-0.5 bg-purple-600 text-white text-[9px] font-black rounded uppercase">Package</span>
+                                                                <span className="text-xs font-black uppercase text-purple-900">{item.title}</span>
                                                             </div>
-                                                            <p className="text-sm font-black text-gray-900 mt-1 uppercase leading-none">{item.user || item.email || item.phone}</p>
-                                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">₹{item.priceAtBooking} • {item.paymentMode}</p>
+                                                            <p className="text-sm font-black uppercase text-slate-900 leading-none">{item.user || item.email}</p>
+                                                            <p className="text-[10px] font-bold text-slate-500 mt-1">₹{item.priceAtBooking} via {item.paymentMode.toUpperCase()} ({item.bookingDate} {item.bookingTime})</p>
                                                         </div>
-                                                        <div className="flex gap-2 items-center shrink-0">
-                                                            {(userRole === 'admin' || userRole === 'superadmin') ? (
-                                                                <button onClick={() => verifyPackage(item.key)} className="px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm">Verify & Credit</button>
+                                                        <div className="flex gap-2">
+                                                            {userRole === 'admin' || userRole === 'superadmin' ? (
+                                                                <button onClick={() => togglePaymentStatus(item.key, item)} className="px-4 py-2.5 bg-green-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-green-600 transition-colors">Verify & Credit</button>
                                                             ) : (
-                                                                <span className="px-4 py-2.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-xl text-[10px] font-black uppercase tracking-widest">Verify Pending</span>
+                                                                <span className="px-4 py-2.5 bg-yellow-50 text-yellow-600 border border-yellow-200 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center">Verify Pending</span>
                                                             )}
-                                                            {(userRole === 'admin' || userRole === 'superadmin') && (
-                                                                <button onClick={() => cancelPackage(item.key)} className="p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-full transition-all"><Icon name="x" className="w-5 h-5"/></button>
+                                                            {userRole === 'superadmin' && (
+                                                                <button onClick={() => deleteRevenueRecord(item.key, item)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Icon name="x" className="w-5 h-5"/></button>
                                                             )}
                                                         </div>
                                                     </div>
@@ -2208,7 +2268,8 @@
                                         </div>
                                     )}
 
-                                    {dayBookingsList.length === 0 ? <p className="text-center py-20 font-black text-slate-200 uppercase tracking-widest text-left">No Matrix Activity Recorded</p> : (
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b pb-2">Lane Assignments</h4>
+                                    {dayBookingsList.length === 0 ? <p className="text-center py-10 font-black text-slate-200 uppercase tracking-widest text-left">No Matrix Activity Recorded</p> : (
                                         <div className="space-y-4">
                                             {dayBookingsList.map((item, idx) => {
                                                 if (item.status === 'maintenance' || item.status === 'resting') {
@@ -2223,9 +2284,11 @@
                                                                 <button onClick={() => { 
                                                                     setConfirmModal({
                                                                         message: isResting ? "Remove this resting hours block?" : "Remove this maintenance block?",
-                                                                        onConfirm: async () => {
-                                                                            const n = {...bookings}; delete n[item.key]; setBookings(n);
-                                                                            await syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                                                                        onConfirm: () => {
+                                                                            const n = {...bookings}; 
+                                                                            delete n[item.key]; 
+                                                                            setBookings(n);
+                                                                            syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
                                                                             triggerToast("Slot opened.", "success");
                                                                         }
                                                                     });
@@ -2235,50 +2298,41 @@
                                                     );
                                                 }
                                                 return (
-                                                    <div key={idx} className="p-5 border border-slate-100 rounded-3xl flex items-center justify-between gap-6 shadow-sm">
+                                                    <div key={idx} className="p-5 border border-slate-100 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
                                                         <div className="flex-1 text-left">
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className="px-2 py-0.5 bg-black text-white text-[9px] font-black rounded">{item.key.split('-')[3]}</span>
-                                                                <span className="text-xs font-black uppercase text-slate-900">{item.slot}</span>
-                                                                {item.paymentMode && (
-                                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${item.paymentMode === 'upi' ? 'bg-purple-100 text-purple-700' : item.paymentMode === 'venue' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                                        {item.paymentMode.replace('_credits', ' cr')}
-                                                                    </span>
-                                                                )}
-                                                                {(item.paymentMode === 'upi' || item.paymentMode === 'venue') && (
-                                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${item.paymentStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                                        {item.paymentStatus === 'verified' ? 'Paid' : 'Pending'}
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            <div className="flex items-center gap-2 mb-1"><span className="px-2 py-0.5 bg-black text-white text-[9px] font-black rounded">{item.key.split('-')[3]}</span><span className="text-xs font-black uppercase text-slate-900">{item.slot}</span></div>
                                                             <p className="text-sm font-black uppercase text-slate-900 leading-none">{item.user}</p>
                                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{item.phone}</p>
                                                         </div>
-                                                        <div className="flex gap-2 no-print items-center">
+                                                        <div className="flex flex-col sm:items-end gap-2 no-print border-t sm:border-t-0 pt-3 sm:pt-0">
+                                                            <div className="flex gap-2 w-full justify-end">
+                                                                <button onClick={() => toggleOccupy(item.key)} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${item.status === 'occupied' ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-white text-slate-400 hover:border-emerald-50 hover:text-emerald-600'}`}>{item.status === 'occupied' ? 'Occupied' : 'Mark Occupy'}</button>
+                                                                <button onClick={() => { 
+                                                                    setConfirmModal({
+                                                                        message: "Delete this assignment completely?",
+                                                                        onConfirm: () => {
+                                                                            const n = {...bookings}; 
+                                                                            delete n[item.key]; 
+                                                                            setBookings(n);
+                                                                            syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates });
+                                                                            triggerToast("Assignment removed.", "success");
+                                                                        }
+                                                                    });
+                                                                }} className="p-2.5 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Icon name="x" className="w-5 h-5"/></button>
+                                                            </div>
                                                             {(item.paymentMode === 'upi' || item.paymentMode === 'venue') && (
-                                                                (userRole === 'admin' || userRole === 'superadmin') ? (
-                                                                    <button onClick={() => togglePaymentStatus(item.key)} className={`px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${item.paymentStatus === 'verified' ? 'bg-white border-gray-200 text-gray-400 hover:text-orange-500' : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white'}`}>
-                                                                        {item.paymentStatus === 'verified' ? 'Unverify' : 'Verify Pay'}
-                                                                    </button>
-                                                                ) : (
-                                                                    <div className={`px-3 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest border-2 ${item.paymentStatus === 'verified' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
-                                                                        {item.paymentStatus === 'verified' ? `Verified by ${item.verifiedBy || 'Admin'} (${item.verifiedByRole || ''})` : 'Verify Pending'}
-                                                                    </div>
-                                                                )
+                                                                <div className="w-full text-right mt-1">
+                                                                    {item.paymentStatus === 'verified' ? (
+                                                                        <span className="text-[10px] font-black text-green-600 bg-green-50 border border-green-100 px-3 py-1.5 rounded-lg inline-block uppercase tracking-widest">Verified by {item.verifiedBy || 'Admin'}</span>
+                                                                    ) : (
+                                                                        userRole === 'admin' || userRole === 'superadmin' ? (
+                                                                            <button onClick={() => togglePaymentStatus(item.key, item)} className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow transition-colors">Verify Pay</button>
+                                                                        ) : (
+                                                                            <span className="text-[10px] font-black text-yellow-600 bg-yellow-50 border border-yellow-100 px-3 py-1.5 rounded-lg inline-block uppercase tracking-widest">Verify Pending</span>
+                                                                        )
+                                                                    )}
+                                                                </div>
                                                             )}
-                                                            <button onClick={() => toggleOccupy(item.key)} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${item.status === 'occupied' ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-white border-gray-200 text-slate-400 hover:border-emerald-50 hover:text-emerald-600'}`}>
-                                                                {item.status === 'occupied' ? 'Occupied' : 'Mark Occupy'}
-                                                            </button>
-                                                            <button onClick={() => { 
-                                                                setConfirmModal({
-                                                                    message: "Cancel booking due to payment failure or player request?",
-                                                                    onConfirm: async () => {
-                                                                        const n = {...bookings}; delete n[item.key]; setBookings(n);
-                                                                        await syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
-                                                                        triggerToast("Booking cancelled & removed.", "success");
-                                                                    }
-                                                                });
-                                                            }} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="Cancel Booking"><Icon name="x" className="w-5 h-5"/></button>
                                                         </div>
                                                     </div>
                                                 );
@@ -2296,7 +2350,7 @@
                     {/* End-user Checkout Payment Modal */}
                     {showPayment && (selections.length > 0 || selectedPackage) && (
                         <div className="fixed inset-0 flex items-center justify-center z-[130] bg-black/80 backdrop-blur-md px-4 animate-in">
-                            <div className="bg-white rounded-[2rem] sm:rounded-[3rem] shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col relative border">
+                            <div className="bg-white rounded-[2rem] sm:rounded-[3rem] shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col relative border mx-auto">
                                 {isProcessing && (
                                     <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-[150] flex flex-col items-center justify-center animate-in rounded-[2rem] sm:rounded-[3rem]">
                                         <div className="w-16 h-16 border-4 border-gray-100 border-t-green-600 rounded-full animate-spin mb-6"></div>
@@ -2339,12 +2393,15 @@
                                         
                                         {!selectedPackage && (
                                             <div className="space-y-1.5 border-t border-green-200/60 pt-4 max-h-[15vh] sm:max-h-[80px] overflow-y-auto no-scrollbar">
-                                                {selections.map((sel, idx) => (
-                                                    <div key={idx} className="flex justify-between items-center text-xs">
-                                                        <span className="font-bold text-gray-700">{sel.net} <span className="text-gray-400 mx-1">•</span> {sel.slot}</span>
-                                                        <span className="font-black text-gray-900">₹{activeSlotPrices[sel.slot] || 500}</span>
-                                                    </div>
-                                                ))}
+                                                {selections.map((sel, idx) => {
+                                                    const p = isRainySelected ? (slotPrices[`rainy_${sel.slot}`] || slotPrices[sel.slot] || 500) : (slotPrices[sel.slot] || 500);
+                                                    return (
+                                                        <div key={idx} className="flex justify-between items-center text-xs">
+                                                            <span className="font-bold text-gray-700">{sel.net} <span className="text-gray-400 mx-1">•</span> {sel.slot}</span>
+                                                            <span className="font-black text-gray-900">₹{p}</span>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         )}
                                         {selectedPackage && (
@@ -2377,9 +2434,9 @@
                                                         <p className="text-[9px] sm:text-[10px] font-bold text-green-600 uppercase tracking-widest mt-0.5">
                                                             Balance: {userBalObj.weekday || 0} Sessions
                                                         </p>
-                                                        {isRainySelected && <p className="text-[9px] text-red-500 font-bold mt-0.5">Not valid in Rainy Season</p>}
-                                                        {!isRainySelected && !isWeekdayAllowed && <p className="text-[9px] text-red-500 font-bold mt-0.5">Not valid on weekends</p>}
-                                                        {!isRainySelected && isWeekdayAllowed && !hasEnoughWeekdayCredits && <p className="text-[9px] text-red-500 font-bold mt-0.5">Insufficient balance</p>}
+                                                        {!isWeekdayAllowed && !isRainySelected && <p className="text-[9px] text-red-500 font-bold mt-0.5">Not valid on weekends</p>}
+                                                        {isWeekdayAllowed && !hasEnoughWeekdayCredits && !isRainySelected && <p className="text-[9px] text-red-500 font-bold mt-0.5">Insufficient balance</p>}
+                                                        {isRainySelected && <p className="text-[9px] text-red-500 font-bold mt-0.5 uppercase tracking-widest">Not valid in rainy season</p>}
                                                     </div>
                                                 </div>
                                                 <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'weekday_credits' ? 'border-green-600' : 'border-gray-300'}`}>
@@ -2406,12 +2463,12 @@
                                                         <Icon name="award" className="w-4 h-4 sm:w-5 sm:h-5" />
                                                     </div>
                                                     <div className="text-left">
-                                                        <p className="text-sm sm:text-base font-black text-gray-900">Weekend Credits (All Day)</p>
+                                                        <p className="text-sm sm:text-base font-black text-gray-900">Weekend Credits</p>
                                                         <p className="text-[9px] sm:text-[10px] font-bold text-purple-600 uppercase tracking-widest mt-0.5">
                                                             Balance: {userBalObj.weekend || 0} Sessions
                                                         </p>
-                                                        {isRainySelected && <p className="text-[9px] text-red-500 font-bold mt-0.5">Not valid in Rainy Season</p>}
-                                                        {!isRainySelected && !hasEnoughWeekendCredits && <p className="text-[9px] text-red-500 font-bold mt-0.5">Insufficient balance</p>}
+                                                        {!hasEnoughWeekendCredits && !isRainySelected && <p className="text-[9px] text-red-500 font-bold mt-0.5">Insufficient balance</p>}
+                                                        {isRainySelected && <p className="text-[9px] text-red-500 font-bold mt-0.5 uppercase tracking-widest">Not valid in rainy season</p>}
                                                     </div>
                                                 </div>
                                                 <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'weekend_credits' ? 'border-purple-600' : 'border-gray-300'}`}>
@@ -2592,11 +2649,12 @@
                                                                 </div>
                                                                 <div className="col-span-4">
                                                                     <span className="inline-block sm:hidden text-[9px] font-black text-gray-400 uppercase tracking-wider mr-2">Booked on:</span>
-                                                                    <span className="font-bold text-gray-700">{item.date}</span> <span className="text-gray-400 text-[10px]">@{item.time}</span>
+                                                                    <span className="font-bold text-gray-700">{item.bookingDate || item.date}</span> <span className="text-gray-400 text-[10px]">@{item.bookingTime || item.time}</span>
                                                                 </div>
                                                                 <div className="col-span-2 text-left sm:text-right">
                                                                     <span className="inline-block sm:hidden text-[9px] font-black text-gray-400 uppercase tracking-wider mr-2">Payment:</span>
                                                                     <span className="font-black text-purple-700">₹{item.priceAtBooking}</span> <span className="text-[9px] text-gray-400 block sm:inline">({item.paymentMode.toUpperCase()})</span>
+                                                                    {item.paymentStatus === 'pending' && <span className="text-[8px] font-black text-yellow-600 block uppercase tracking-widest mt-1">Verify Pending</span>}
                                                                 </div>
                                                             </div>
                                                         );
