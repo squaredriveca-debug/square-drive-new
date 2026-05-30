@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         :root { --sd-green: #16a34a; --sd-dark: #111827; }
@@ -86,6 +87,16 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
+
+        // --- SUPABASE CONFIGURATION ---
+        const SUPABASE_URL = "https://iybkupbrptmnlieoliur.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5Ymt1cGJycHRtbmxpZW9saXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNjkxOTcsImV4cCI6MjA5Mjk0NTE5N30.OOSbzF36KLewkcfGxkFnsM6y9f6a5vc4KZkRlNK-lHI";
+        
+        let supabase = null;
+        if (window.supabase) {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+        // ------------------------------
 
         const EMAILJS_PUBLIC_KEY = "9EVo1NqFOOmGWKndd";
         const EMAILJS_PRIVATE_KEY = "L_sKs7-2b_Jx9M1OZ9mgj";
@@ -243,17 +254,64 @@
             const [screenshotPreview, setScreenshotPreview] = useState(null);
             const [isProcessing, setIsProcessing] = useState(false);
 
-            useEffect(() => { localStorage.setItem('sd_bookings_final_v30', JSON.stringify(bookings)); }, [bookings]);
-            useEffect(() => { localStorage.setItem('sd_contacts_final_v30', JSON.stringify(allContacts)); }, [allContacts]);
-            useEffect(() => { localStorage.setItem('sd_codes_v31', JSON.stringify(systemCodes)); }, [systemCodes]);
-            useEffect(() => { localStorage.setItem('sd_credits_v30', JSON.stringify(userCredits)); }, [userCredits]);
-            useEffect(() => { localStorage.setItem('sd_prices_v30', JSON.stringify(slotPrices)); }, [slotPrices]);
-            useEffect(() => { localStorage.setItem('sd_current_user', JSON.stringify(currentUser)); }, [currentUser]);
-            useEffect(() => { localStorage.setItem('sd_blocked_v30', JSON.stringify(blockedDays)); }, [blockedDays]);
-            useEffect(() => { localStorage.setItem('sd_pkg_prices_v30', JSON.stringify(packagePrices)); }, [packagePrices]);
-            useEffect(() => { localStorage.setItem('sd_season_dates_v30', JSON.stringify(seasonDates)); }, [seasonDates]);
-            useEffect(() => { localStorage.setItem('sd_prices_rainy_v30', JSON.stringify(slotPricesRainy)); }, [slotPricesRainy]);
-            useEffect(() => { localStorage.setItem('sd_pkg_prices_rainy_v30', JSON.stringify(packagePricesRainy)); }, [packagePricesRainy]);
+            // Supabase Global Load & Sync State
+            const [isAppReady, setIsAppReady] = useState(false);
+
+            // 1. Fetch remote data from Supabase on Initial Load
+            useEffect(() => {
+                const fetchRemoteData = async () => {
+                    if (!supabase) {
+                        setIsAppReady(true);
+                        return;
+                    }
+                    try {
+                        const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
+                        if (data && data.payload) {
+                            const p = data.payload;
+                            if (p.bookings && Object.keys(p.bookings).length > 0) setBookings(p.bookings);
+                            if (p.allContacts && Object.keys(p.allContacts).length > 0) setAllContacts(p.allContacts);
+                            if (p.systemCodes) setSystemCodes(p.systemCodes);
+                            if (p.userCredits) setUserCredits(p.userCredits);
+                            if (p.slotPrices) setSlotPrices(p.slotPrices);
+                            if (p.blockedDays) setBlockedDays(p.blockedDays);
+                            if (p.packagePrices) setPackagePrices(p.packagePrices);
+                            if (p.seasonDates) setSeasonDates(p.seasonDates);
+                            if (p.slotPricesRainy) setSlotPricesRainy(p.slotPricesRainy);
+                            if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
+                        }
+                    } catch (err) {
+                        console.error("Supabase sync failed, falling back to local storage.", err);
+                    }
+                    setIsAppReady(true);
+                };
+                fetchRemoteData();
+            }, []);
+
+            // 2. Master Sync: Save to both LocalStorage (backup) and Supabase (cloud) whenever state changes
+            useEffect(() => {
+                if (!isAppReady) return; // Do not overwrite DB during initial load
+
+                localStorage.setItem('sd_bookings_final_v30', JSON.stringify(bookings));
+                localStorage.setItem('sd_contacts_final_v30', JSON.stringify(allContacts));
+                localStorage.setItem('sd_codes_v31', JSON.stringify(systemCodes));
+                localStorage.setItem('sd_credits_v30', JSON.stringify(userCredits));
+                localStorage.setItem('sd_prices_v30', JSON.stringify(slotPrices));
+                localStorage.setItem('sd_current_user', JSON.stringify(currentUser));
+                localStorage.setItem('sd_blocked_v30', JSON.stringify(blockedDays));
+                localStorage.setItem('sd_pkg_prices_v30', JSON.stringify(packagePrices));
+                localStorage.setItem('sd_season_dates_v30', JSON.stringify(seasonDates));
+                localStorage.setItem('sd_prices_rainy_v30', JSON.stringify(slotPricesRainy));
+                localStorage.setItem('sd_pkg_prices_rainy_v30', JSON.stringify(packagePricesRainy));
+
+                if (supabase) {
+                    const payload = {
+                        bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy
+                    };
+                    supabase.from('app_settings').upsert({ id: 'global', payload }).then(({error}) => {
+                        if (error) console.error("Cloud save error:", error);
+                    });
+                }
+            }, [isAppReady, bookings, allContacts, systemCodes, userCredits, slotPrices, currentUser, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy]);
 
             useEffect(() => {
                 if (showPricingModal) {
@@ -852,6 +910,16 @@
                 triggerToast("Manual booking added successfully!", "success");
                 setManualEntryModal(null);
             };
+
+            if (!isAppReady) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-green-600">
+                        <div className="w-16 h-16 border-4 border-gray-200 border-t-green-600 rounded-full animate-spin mb-4"></div>
+                        <h2 className="text-2xl font-black uppercase tracking-widest text-gray-900">Syncing Matrix...</h2>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-2">Connecting to Secure Database</p>
+                    </div>
+                );
+            }
 
             return (
                 <div className="min-h-screen flex flex-col text-left">
@@ -1455,7 +1523,7 @@
                                             <div key={cnt} className="bg-white rounded-[2.5rem] p-8 border border-gray-200 shadow-xl flex flex-col transition-all hover:-translate-y-1 h-full min-h-[320px]">
                                                 <div className="flex-grow">
                                                     <h4 className="text-2xl font-black text-gray-900 mb-1 leading-none">{cnt} Sessions</h4>
-                                                    <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-6">{pkgView === 'weekday' ? 'Valid Monday to Friday' : 'Valid All 7 Days'}</p>
+                                                    <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-6">{pkgView === 'weekday' ? 'Valid Mon-Fri except rainy season' : 'Valid all days except rainy season'}</p>
                                                     <div className="text-4xl font-black text-gray-900 mb-8">₹{activePackagePrices[pkgView][cnt]}</div>
                                                 </div>
                                                 <button onClick={() => { setSelectedPackage({ sessions: cnt, title: `${cnt} ${pkgView.toUpperCase()} Pack`, price: activePackagePrices[pkgView][cnt], type: pkgView }); setShowPayment(true); }} 
@@ -2130,7 +2198,6 @@
                                                 ))}
                                             </div>
                                         )}
-                                        
                                         {selectedPackage && (
                                             <div className="border-t border-green-200/60 pt-4 text-xs font-medium text-gray-700 text-right">
                                                 Includes {selectedPackage.sessions} net booking credits.
