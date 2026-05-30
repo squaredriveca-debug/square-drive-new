@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#16a34a">
     <title>Square Drive | Elite Cricket Academy Booking</title>
     
-    <!-- 1. All Required Scripts -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -45,13 +44,10 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- SUPABASE CONFIGURATION ---
         const SUPABASE_URL = "https://iybkupbrptmnlieoliur.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5Ymt1cGJycHRtbmxpZW9saXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNjkxOTcsImV4cCI6MjA5Mjk0NTE5N30.OOSbzF36KLewkcfGxkFnsM6y9f6a5vc4KZkRlNK-lHI";
-        
-        // Initialize Supabase immediately
         const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
         const EMAILJS_PUBLIC_KEY = "9EVo1NqFOOmGWKndd";
@@ -146,7 +142,7 @@
             const [controlEndSlot, setControlEndSlot] = useState(TIME_SLOTS[TIME_SLOTS.length - 1]);
             const [controlReason, setControlReason] = useState('maintenance'); 
 
-            // Core Database States
+            // Database States
             const [bookings, setBookings] = useState(() => JSON.parse(localStorage.getItem('sd_bookings_final_v30')) || {});
             const [allContacts, setAllContacts] = useState(() => JSON.parse(localStorage.getItem('sd_contacts_final_v30')) || {});
             const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('sd_current_user')) || null);
@@ -204,20 +200,17 @@
             const [isProcessing, setIsProcessing] = useState(false);
 
             const [isAppReady, setIsAppReady] = useState(false);
-            const lastUploadedPayload = React.useRef('');
 
             useEffect(() => {
                 let channel = null;
 
                 const initSupabaseAndFetch = async () => {
                     try {
-                        if (!supabase) throw new Error("Supabase client not found. Script missing.");
-
-                        // 1. Fetch real data from Cloud
+                        if (!supabase) throw new Error("Supabase client not found.");
+                        
                         const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
                         if (data && data.payload) {
                             const p = data.payload;
-                            lastUploadedPayload.current = JSON.stringify(p);
                             if (p.bookings) setBookings(p.bookings);
                             if (p.allContacts) setAllContacts(p.allContacts);
                             if (p.systemCodes) setSystemCodes(p.systemCodes);
@@ -230,12 +223,10 @@
                             if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
                         }
 
-                        // 2. Activate Realtime Sync Listening
                         channel = supabase.channel('realtime_app_settings')
                             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
                                 const p = payload.new.payload;
                                 if (p) {
-                                    lastUploadedPayload.current = JSON.stringify(p);
                                     if (p.bookings) setBookings(p.bookings);
                                     if (p.allContacts) setAllContacts(p.allContacts);
                                     if (p.systemCodes) setSystemCodes(p.systemCodes);
@@ -251,49 +242,28 @@
                             .subscribe();
 
                     } catch (err) {
-                        console.error("Supabase sync failed, falling back to local storage.", err);
+                        console.error("Supabase sync failed.", err);
                     } finally {
                         setIsAppReady(true);
                     }
                 };
 
                 initSupabaseAndFetch();
-
                 return () => { if (channel && supabase) supabase.removeChannel(channel); };
             }, []);
 
-            useEffect(() => {
-                if (!isAppReady) return; 
-
-                // Save locally
-                localStorage.setItem('sd_bookings_final_v30', JSON.stringify(bookings));
-                localStorage.setItem('sd_contacts_final_v30', JSON.stringify(allContacts));
-                localStorage.setItem('sd_codes_v31', JSON.stringify(systemCodes));
-                localStorage.setItem('sd_credits_v30', JSON.stringify(userCredits));
-                localStorage.setItem('sd_prices_v30', JSON.stringify(slotPrices));
-                localStorage.setItem('sd_current_user', JSON.stringify(currentUser));
-                localStorage.setItem('sd_blocked_v30', JSON.stringify(blockedDays));
-                localStorage.setItem('sd_pkg_prices_v30', JSON.stringify(packagePrices));
-                localStorage.setItem('sd_season_dates_v30', JSON.stringify(seasonDates));
-                localStorage.setItem('sd_prices_rainy_v30', JSON.stringify(slotPricesRainy));
-                localStorage.setItem('sd_pkg_prices_rainy_v30', JSON.stringify(packagePricesRainy));
-
-                // Save to Cloud
-                if (supabase) {
-                    const payload = {
-                        bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy
-                    };
-                    
-                    const newPayloadStr = JSON.stringify(payload);
-                    if (newPayloadStr === lastUploadedPayload.current) return; 
-                    
-                    lastUploadedPayload.current = newPayloadStr;
-
-                    supabase.from('app_settings').upsert({ id: 'global', payload }).then(({error}) => {
-                        if (error) console.error("Cloud save error:", error);
-                    });
+            const syncToCloud = async (payloadOverride) => {
+                localStorage.setItem('sd_bookings_final_v30', JSON.stringify(payloadOverride.bookings));
+                localStorage.setItem('sd_contacts_final_v30', JSON.stringify(payloadOverride.allContacts));
+                localStorage.setItem('sd_credits_v30', JSON.stringify(payloadOverride.userCredits));
+                
+                if (!supabase) return;
+                try {
+                    await supabase.from('app_settings').upsert({ id: 'global', payload: payloadOverride });
+                } catch (err) {
+                    console.error("Cloud push failed", err);
                 }
-            }, [isAppReady, bookings, allContacts, systemCodes, userCredits, slotPrices, currentUser, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy]);
+            };
 
             const triggerToast = (msg, type = 'success') => {
                 setToast({ msg, type });
@@ -308,7 +278,6 @@
                     const payload = { bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy };
                     const { error } = await supabase.from('app_settings').upsert({ id: 'global', payload });
                     if (error) throw error;
-                    lastUploadedPayload.current = JSON.stringify(payload);
                     triggerToast("Cloud Database Synced!", "success");
                 } catch (err) {
                     triggerToast("Sync Failed: " + err.message, "error");
@@ -346,12 +315,8 @@
                 tempTextArea.style.left = "-9999px";
                 document.body.appendChild(tempTextArea);
                 tempTextArea.select();
-                try {
-                    document.execCommand("copy");
-                    triggerToast("UPI Address Copied!", "success");
-                } catch (err) {
-                    triggerToast("Could not copy UPI address.", "error");
-                }
+                try { document.execCommand("copy"); triggerToast("UPI Address Copied!", "success"); } 
+                catch (err) { triggerToast("Could not copy UPI address.", "error"); }
                 document.body.removeChild(tempTextArea);
             };
 
@@ -392,7 +357,6 @@
 
                 Object.values(bookings).forEach(b => {
                     if (!b || !b.priceAtBooking) return;
-                    
                     let itemDateStr = "";
                     if (b.type === 'package') {
                         const p = b.date.split('/');
@@ -400,22 +364,19 @@
                     } else {
                         itemDateStr = b.date;
                     }
-
                     if (!itemDateStr) return;
 
                     const amt = b.priceAtBooking || 0;
-
                     if (itemDateStr === actualTodayStr) todayRev += amt;
                     if (itemDateStr >= revStartDateStr && itemDateStr <= revEndDateStr) {
                         selectedDateRev += amt;
-                        selectedDateBreakdown.push({ ...b, parsedDate: itemDateStr });
+                        selectedDateBreakdown.push({ ...b, parsedDate: itemDateStr, rawKey: b.key });
                     }
                     if (itemDateStr.startsWith(revMonth)) monthRev += amt;
                     if (itemDateStr.startsWith(revYear)) annualRev += amt;
                 });
 
                 selectedDateBreakdown.sort((a,b) => a.parsedDate.localeCompare(b.parsedDate));
-
                 return { todayRev, selectedDateRev, monthRev, annualRev, selectedDateBreakdown };
             }, [bookings, revStartDateStr, revEndDateStr]);
             
@@ -426,14 +387,24 @@
                     .sort((a, b) => a.slot.localeCompare(b.slot));
             }, [bookings, selectedDate]);
 
+            const pendingPackages = useMemo(() => {
+                return Object.entries(bookings)
+                    .filter(([key, b]) => b.type === 'package' && b.paymentStatus === 'pending')
+                    .map(([key, b]) => ({ ...b, key }));
+            }, [bookings]);
+
             const selectionTotal = useMemo(() => selections.reduce((t, s) => t + (activeSlotPrices[s.slot] || 500), 0), [selections, activeSlotPrices]);
             const finalPayable = selectedPackage ? selectedPackage.price : selectionTotal;
 
             const userBalObj = useMemo(() => {
                 const defaults = { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
                 if (!currentUser) return defaults;
-                const raw = userCredits[currentUser.email] || {};
                 
+                const eKey = currentUser.email;
+                const pKey = getCleanPhone(currentUser.phone);
+                const activeKey = (eKey && userCredits[eKey]) ? eKey : (pKey && userCredits[pKey] ? pKey : (eKey || pKey));
+
+                const raw = userCredits[activeKey] || {};
                 const weekday = raw.weekday || 0;
                 const weekend = raw.weekend || 0;
                 const weekdayBought = raw.weekdayBought !== undefined ? raw.weekdayBought : weekday;
@@ -444,12 +415,10 @@
                 return { weekday, weekend, weekdayBought, weekendBought, weekdayUsed, weekendUsed };
             }, [userCredits, currentUser]);
 
-            const relevantCreditKey = isWeekendSelected ? 'weekend' : 'weekday';
-            const availableRelevantCredits = isWeekendSelected ? userBalObj.weekend : (userBalObj.weekday + userBalObj.weekend);
-
             const hasEnoughWeekdayCredits = userBalObj.weekday >= selections.length;
             const isWeekdayAllowed = !isWeekendSelected;
             const canUseWeekday = hasEnoughWeekdayCredits && isWeekdayAllowed && !isRainySelected;
+            
             const hasEnoughWeekendCredits = userBalObj.weekend >= selections.length;
             const canUseWeekend = hasEnoughWeekendCredits && !isRainySelected;
 
@@ -459,7 +428,63 @@
                 return Object.entries(bookings)
                     .filter(([key, b]) => b.phone === phone || b.email === currentUser.email)
                     .map(([key, b]) => ({ ...b, key }))
-                    .reverse();
+                    .sort((a, b) => {
+                        const getActionTimestamp = (item) => {
+                            if (item.type === 'package') {
+                                const parts = item.key.split('-');
+                                const ms = parseInt(parts[parts.length - 1], 10);
+                                if (!isNaN(ms) && ms > 1000000000000) return ms;
+                            }
+                            
+                            const bDate = item.bookingDate || item.date; 
+                            const bTime = item.bookingTime || item.time || '12:00 AM';
+                            
+                            if (bDate) {
+                                try {
+                                    let day, month, year;
+                                    if (bDate.includes('/')) {
+                                        const parts = bDate.split('/');
+                                        day = parseInt(parts[0], 10);
+                                        month = parseInt(parts[1], 10) - 1;
+                                        year = parseInt(parts[2], 10);
+                                    } else if (bDate.includes('-')) {
+                                        const parts = bDate.split('-');
+                                        year = parseInt(parts[0], 10);
+                                        month = parseInt(parts[1], 10) - 1;
+                                        day = parseInt(parts[2], 10);
+                                    } else {
+                                        return 0;
+                                    }
+        
+                                    let [timeStr, modifier] = bTime.trim().split(/\s+/);
+                                    let [hours, minutes] = timeStr.split(':');
+                                    hours = parseInt(hours, 10) || 0;
+                                    minutes = parseInt(minutes, 10) || 0;
+        
+                                    if (modifier) {
+                                        modifier = modifier.toUpperCase();
+                                        if (modifier === 'PM' && hours !== 12) hours += 12;
+                                        if (modifier === 'AM' && hours === 12) hours = 0;
+                                    }
+        
+                                    return new Date(year, month, day, hours, minutes).getTime();
+                                } catch (e) {
+                                    return 0;
+                                }
+                            }
+                            return 0;
+                        };
+                        
+                        const timeA = getActionTimestamp(a);
+                        const timeB = getActionTimestamp(b);
+                        
+                        if (timeA === timeB) {
+                            if (a.type === 'package' && b.type !== 'package') return 1;
+                            if (b.type === 'package' && a.type !== 'package') return -1;
+                            return b.key.localeCompare(a.key);
+                        }
+                        return timeB - timeA; 
+                    });
             }, [bookings, currentUser]);
 
             const cleanManualPhone = getCleanPhone(manualPhone);
@@ -483,15 +508,11 @@
 
             const filteredContacts = useMemo(() => {
                 if (contactFilter === 'system') return [];
-                return Object.entries(allContacts).filter(([phone, user]) => 
-                    contactFilter === 'all' || user.type === contactFilter
-                );
+                return Object.entries(allContacts).filter(([phone, user]) => contactFilter === 'all' || user.type === contactFilter);
             }, [allContacts, contactFilter]);
 
             useEffect(() => {
-                if (manualPayment === 'credits' && !canUseManualCredits) {
-                    setManualPayment('venue');
-                }
+                if (manualPayment === 'credits' && !canUseManualCredits) setManualPayment('venue');
             }, [canUseManualCredits, manualPayment]);
 
             const handleDateChange = (newDate) => { if(!newDate) return; setSelectedDate(newDate); setSelections([]); };
@@ -503,15 +524,10 @@
                 return TIME_SLOTS.slice(sIdx, eIdx + 1);
             };
 
-            const applyFacilityControl = (action) => {
+            const applyFacilityControl = async (action) => {
                 const getDatesInRange = (start, end) => {
-                    const dateArr = [];
-                    let curr = new Date(start);
-                    const endDate = new Date(end);
-                    while (curr <= endDate) {
-                        dateArr.push(getISO(curr));
-                        curr.setDate(curr.getDate() + 1);
-                    }
+                    const dateArr = []; let curr = new Date(start); const endDate = new Date(end);
+                    while (curr <= endDate) { dateArr.push(getISO(curr)); curr.setDate(curr.getDate() + 1); }
                     return dateArr;
                 };
 
@@ -519,16 +535,11 @@
                 if (targetDates.length === 0) return triggerToast("Invalid date range selected.", "error");
 
                 if (controlScope === 'facility' && controlDuration === 'fullday') {
-                    setBlockedDays(prev => {
-                        const next = { ...prev };
-                        targetDates.forEach(d => {
-                            if (action === 'block') next[d] = true;
-                            else delete next[d];
-                        });
-                        return next;
-                    });
-                    setSelections([]); 
-                    setShowFacilityControls(false);
+                    const nextBlocked = { ...blockedDays };
+                    targetDates.forEach(d => { if (action === 'block') nextBlocked[d] = true; else delete nextBlocked[d]; });
+                    setBlockedDays(nextBlocked);
+                    setSelections([]); setShowFacilityControls(false);
+                    await syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays: nextBlocked, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                     triggerToast(`Facility completely ${action === 'block' ? 'closed' : 'reopened'} for selected dates.`, "success");
                     return;
                 }
@@ -539,60 +550,60 @@
                 if (targetNets.length === 0) return triggerToast("Please select at least one net to block.", "error");
                 if (targetSlots.length === 0) return triggerToast("Invalid time range selected.", "error");
 
-                setBookings(prev => {
-                    const next = { ...prev };
-                    targetDates.forEach(d => {
-                        targetNets.forEach(net => {
-                            targetSlots.forEach(slot => {
-                                const key = `${d}-${net}-${slot}`;
-                                if (action === 'block') {
-                                    next[key] = { 
-                                        type: 'system', 
-                                        status: controlReason, 
-                                        user: controlReason === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
-                                        date: d, slot: slot, net: net, 
-                                        bookingDate: new Date().toLocaleDateString('en-IN'),
-                                        bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                                    };
-                                } else {
-                                    if (next[key]?.status === 'maintenance' || next[key]?.status === 'resting') {
-                                        delete next[key];
-                                    }
-                                }
-                            });
+                const nextBookings = { ...bookings };
+                targetDates.forEach(d => {
+                    targetNets.forEach(net => {
+                        targetSlots.forEach(slot => {
+                            const key = `${d}-${net}-${slot}`;
+                            if (action === 'block') {
+                                nextBookings[key] = { 
+                                    type: 'system', status: controlReason, 
+                                    user: controlReason === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
+                                    date: d, slot: slot, net: net, 
+                                    bookingDate: new Date().toLocaleDateString('en-IN'),
+                                    bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                                };
+                            } else {
+                                if (nextBookings[key]?.status === 'maintenance' || nextBookings[key]?.status === 'resting') delete nextBookings[key];
+                            }
                         });
                     });
-                    return next;
                 });
-
+                setBookings(nextBookings);
+                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                 triggerToast(`${controlReason === 'resting' ? 'Resting hours' : 'Maintenance'} blocks ${action === 'block' ? 'applied' : 'cleared'} successfully across selected dates.`, "success");
                 setShowFacilityControls(false);
             };
 
-            const handleUserLoginSubmit = (e) => {
+            const handleUserLoginSubmit = async (e) => {
                 e.preventDefault();
                 const cleanPhone = getCleanPhone(userLoginPhone);
+                let nextContacts = { ...allContacts };
+
                 if (userLoginType === 'guest') {
                     const guestUser = { name: userLoginName, email: userLoginEmail || '', phone: cleanPhone, type: 'guest' };
-                    if (!allContacts[cleanPhone]) {
-                        setAllContacts(prev => ({ ...prev, [cleanPhone]: guestUser }));
+                    if (!nextContacts[cleanPhone]) {
+                        nextContacts[cleanPhone] = guestUser;
+                        setAllContacts(nextContacts);
+                        await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                     }
-                    setCurrentUser(allContacts[cleanPhone] || guestUser);
+                    setCurrentUser(nextContacts[cleanPhone] || guestUser);
                     triggerToast("Logged in as Guest successfully!", "success");
                     setShowUserLogin(false); return;
                 }
-                const existing = allContacts[cleanPhone];
+                const existing = nextContacts[cleanPhone];
                 if (existing) {
                     if (existing.password === userLoginPassword) { 
                         setCurrentUser(existing); 
                         triggerToast("Logged in successfully!", "success");
                         setShowUserLogin(false); 
-                    }
-                    else triggerToast("Invalid Password. Identity rejected.", "error");
+                    } else triggerToast("Invalid Password. Identity rejected.", "error");
                 } else {
                     const newUser = { name: userLoginName, email: userLoginEmail, phone: cleanPhone, type: userLoginType, password: userLoginPassword };
-                    setAllContacts(prev => ({ ...prev, [cleanPhone]: newUser }));
+                    nextContacts[cleanPhone] = newUser;
+                    setAllContacts(nextContacts);
                     setCurrentUser(newUser); 
+                    await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                     triggerToast("New profile registered & logged in!", "success");
                     setShowUserLogin(false);
                 }
@@ -616,22 +627,18 @@
                             })
                         });
                         if (res.ok) { 
-                            setExpectedResetOtp(otp); 
-                            setIsResetOtpSent(true); 
+                            setExpectedResetOtp(otp); setIsResetOtpSent(true); 
                             triggerToast("Recovery OTP sent to your registered email!", "success");
                         }
-                    } catch (err) { 
-                        triggerToast("Email gateway connection error.", "error"); 
-                    } finally { 
-                        setIsSendingResetOtp(false); 
-                    }
+                    } catch (err) { triggerToast("Email gateway connection error.", "error"); } 
+                    finally { setIsSendingResetOtp(false); }
                 } else {
                     if (resetOtp === expectedResetOtp || resetOtp === "123456") {
-                        setAllContacts(prev => ({ ...prev, [cleanPhone]: { ...prev[cleanPhone], password: newPassword } }));
+                        const nextContacts = { ...allContacts, [cleanPhone]: { ...allContacts[cleanPhone], password: newPassword } };
+                        setAllContacts(nextContacts);
+                        await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                         triggerToast("Password adjusted successfully!", "success"); 
-                        setIsForgotPassword(false); 
-                        setIsResetOtpSent(false); 
-                        setLoginStep('form');
+                        setIsForgotPassword(false); setIsResetOtpSent(false); setLoginStep('form');
                     } else triggerToast("Invalid OTP code matching failed.", "error");
                 }
             };
@@ -648,10 +655,10 @@
                         
                         setConfirmModal({
                             message: msg,
-                            onConfirm: () => {
-                                const n = { ...bookings }; 
-                                delete n[key]; 
-                                setBookings(n);
+                            onConfirm: async () => {
+                                const nextBookings = { ...bookings }; delete nextBookings[key]; 
+                                setBookings(nextBookings);
+                                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                                 triggerToast((bookings[key]?.status === 'maintenance' || bookings[key]?.status === 'resting') ? "Block cleared." : "Lane entry cleared.", "success");
                             }
                         });
@@ -673,19 +680,36 @@
                 else setSelections([...selections, { net, slot }]);
             };
 
-            const toggleOccupy = (key) => {
-                setBookings(prev => ({ ...prev, [key]: { ...prev[key], status: prev[key].status === 'occupied' ? null : 'occupied' } }));
+            const toggleOccupy = async (key) => {
+                const nextBookings = { ...bookings, [key]: { ...bookings[key], status: bookings[key].status === 'occupied' ? null : 'occupied' } };
+                setBookings(nextBookings);
+                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                 triggerToast("Occupancy status toggled.", "success");
             };
 
-            const togglePaymentStatus = (key) => {
-                setBookings(prev => ({ 
-                    ...prev, 
+            const togglePaymentStatus = async (key) => {
+                if (userRole !== 'admin' && userRole !== 'superadmin') {
+                    return triggerToast("Only Admins or Super Admins can verify payments.", "error");
+                }
+                
+                const matchedKey = Object.keys(systemCodes).find(k => 
+                    systemCodes[k].roleType === userRole || 
+                    (k.startsWith('super') && userRole === 'superadmin') || 
+                    (k.startsWith('admin') && userRole === 'admin')
+                );
+                const verifierName = matchedKey && systemCodes[matchedKey].name ? systemCodes[matchedKey].name : userRole.toUpperCase();
+
+                const nextBookings = { 
+                    ...bookings, 
                     [key]: { 
-                        ...prev[key], 
-                        paymentStatus: prev[key].paymentStatus === 'verified' ? 'pending' : 'verified' 
+                        ...bookings[key], 
+                        paymentStatus: bookings[key].paymentStatus === 'verified' ? 'pending' : 'verified',
+                        verifiedBy: bookings[key].paymentStatus === 'verified' ? null : verifierName,
+                        verifiedByRole: bookings[key].paymentStatus === 'verified' ? null : userRole
                     } 
-                }));
+                };
+                setBookings(nextBookings);
+                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                 triggerToast("Payment status updated.", "success");
             };
 
@@ -704,66 +728,64 @@
                 const ticketNo = `SD-${now.getTime().toString().slice(-6)}`;
                 const cleanPhone = getCleanPhone(currentUser?.phone || '');
                 
-                setTimeout(() => {
-                    const newTicket = {
-                        ticketNo, bookedBy: currentUser.name, role: currentUser.type.toUpperCase(),
-                        dateOfBooking: now.toLocaleDateString('en-IN'), timeOfBooking: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                        trainingDate: selectedDate, details: selections.map(s => ({ net: s.net, slot: s.slot })),
-                        paymentStatus: paymentMethod === 'upi' ? 'Verification Pending' : ((paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 'Paid via Credits' : 'Pay at Ground'),
-                        amount: finalPayable, verificationImage: screenshotPreview ? 'Uploaded' : null 
-                    };
+                setTimeout(async () => {
+                    const nextBookings = { ...bookings };
+                    const nextCredits = { ...userCredits };
 
-                    const next = { ...bookings };
                     if (selectedPackage) {
                         const tier = selectedPackage.type; 
-                        setUserCredits(prev => {
-                            const uo = prev[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
-                            return { 
-                                ...prev, 
-                                [currentUser.email]: { 
-                                    ...uo, 
-                                    [tier]: (uo[tier] || 0) + selectedPackage.sessions,
-                                    [`${tier}Bought`]: (uo[`${tier}Bought`] || 0) + selectedPackage.sessions
-                                }
-                            };
-                        });
-
                         const pkgKey = `pkg-${currentUser.email}-${Date.now()}`;
-                        next[pkgKey] = {
+                        const isPending = (paymentMethod === 'upi' || paymentMethod === 'venue');
+
+                        if (!isPending) {
+                            const uo = nextCredits[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
+                            nextCredits[currentUser.email] = { 
+                                ...uo, 
+                                [tier]: (uo[tier] || 0) + selectedPackage.sessions,
+                                [`${tier}Bought`]: (uo[`${tier}Bought`] || 0) + selectedPackage.sessions
+                            };
+                        }
+
+                        nextBookings[pkgKey] = {
                             type: 'package',
                             title: selectedPackage.title,
+                            tier: tier,
+                            sessions: selectedPackage.sessions,
                             priceAtBooking: selectedPackage.price,
                             paymentMode: paymentMethod,
-                            paymentStatus: (paymentMethod === 'upi' || paymentMethod === 'venue') ? 'pending' : 'verified',
+                            paymentStatus: isPending ? 'pending' : 'verified',
+                            user: currentUser.name,
                             email: currentUser.email,
                             phone: cleanPhone,
                             date: now.toLocaleDateString('en-IN'),
                             time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                         };
-                        setBookings(next);
-                        triggerToast("Package added to account credits successfully!", "success");
+                        
+                        setBookings(nextBookings);
+                        if (!isPending) setUserCredits(nextCredits);
+                        await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                        triggerToast(isPending ? "Package requested! Pending admin verification." : "Package added to account credits successfully!", "success");
+                    
                     } else {
                         if (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') {
-                            setUserCredits(prev => {
-                                const uo = { ...prev[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
-                                let rem = selections.length;
-                                if (paymentMethod === 'weekend_credits') {
-                                    const used = Math.min(uo.weekend || 0, rem);
-                                    uo.weekend = Math.max(0, (uo.weekend || 0) - used);
-                                    uo.weekendUsed = (uo.weekendUsed || 0) + used;
-                                } else {
-                                    const used = Math.min(uo.weekday || 0, rem);
-                                    uo.weekday = Math.max(0, (uo.weekday || 0) - used);
-                                    uo.weekdayUsed = (uo.weekdayUsed || 0) + used;
-                                }
-                                return { ...prev, [currentUser.email]: uo };
-                            });
+                            const uo = { ...nextCredits[currentUser.email] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
+                            let rem = selections.length;
+                            if (paymentMethod === 'weekend_credits') {
+                                const used = Math.min(uo.weekend || 0, rem);
+                                uo.weekend = Math.max(0, (uo.weekend || 0) - used);
+                                uo.weekendUsed = (uo.weekendUsed || 0) + used;
+                            } else {
+                                const used = Math.min(uo.weekday || 0, rem);
+                                uo.weekday = Math.max(0, (uo.weekday || 0) - used);
+                                uo.weekdayUsed = (uo.weekdayUsed || 0) + used;
+                            }
+                            nextCredits[currentUser.email] = uo;
                         }
                         
                         selections.forEach(s => { 
-                            next[`${selectedDate}-${s.net}-${s.slot}`] = { 
+                            nextBookings[`${selectedDate}-${s.net}-${s.slot}`] = { 
                                 type: 'user', user: currentUser.name, email: currentUser.email, phone: cleanPhone,
-                                priceAtBooking: (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 0 : (slotPrices[s.slot] || 500), 
+                                priceAtBooking: (paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 0 : (activeSlotPrices[s.slot] || 500), 
                                 paymentMode: paymentMethod, 
                                 paymentStatus: (paymentMethod === 'upi' || paymentMethod === 'venue') ? 'pending' : 'verified',
                                 date: selectedDate, slot: s.slot, net: s.net, status: null,
@@ -771,14 +793,74 @@
                                 bookingTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
                             }; 
                         });
-                        setBookings(next);
+                        setBookings(nextBookings);
+                        setUserCredits(nextCredits);
+                        await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                         triggerToast("Nets reserved successfully!", "success");
                     }
                     
-                    const ticketToRender = { ...newTicket, verificationImage: screenshotPreview };
-                    setTicketData(ticketToRender); 
+                    const newTicket = {
+                        ticketNo, bookedBy: currentUser.name, role: currentUser.type.toUpperCase(),
+                        dateOfBooking: now.toLocaleDateString('en-IN'), timeOfBooking: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                        trainingDate: selectedPackage ? 'Membership Pack' : selectedDate, 
+                        details: selectedPackage ? [{ net: 'Credits', slot: `${selectedPackage.sessions} Sessions` }] : selections.map(s => ({ net: s.net, slot: s.slot })),
+                        paymentStatus: paymentMethod === 'upi' ? 'Verification Pending' : ((paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 'Paid via Credits' : 'Pay at Ground'),
+                        amount: finalPayable, verificationImage: screenshotPreview 
+                    };
+
+                    setTicketData(newTicket); 
                     setIsProcessing(false); setIsSuccess(true); setSelections([]); setSelectedPackage(null); setShowPayment(false); setScreenshotPreview(null);
                 }, 1500);
+            };
+
+            const verifyPackage = async (pkgKey) => {
+                if (userRole !== 'admin' && userRole !== 'superadmin') return triggerToast("Only Admins can verify.", "error");
+                const pkg = bookings[pkgKey];
+                if (!pkg || pkg.paymentStatus === 'verified') return;
+
+                const matchedKey = Object.keys(systemCodes).find(k => systemCodes[k].roleType === userRole || (k.startsWith('super') && userRole === 'superadmin') || (k.startsWith('admin') && userRole === 'admin'));
+                const verifierName = matchedKey && systemCodes[matchedKey].name ? systemCodes[matchedKey].name : userRole.toUpperCase();
+
+                const nextBookings = {
+                    ...bookings,
+                    [pkgKey]: {
+                        ...pkg,
+                        paymentStatus: 'verified',
+                        verifiedBy: verifierName,
+                        verifiedByRole: userRole
+                    }
+                };
+
+                const tier = pkg.tier;
+                const emailKey = pkg.email || pkg.phone;
+                const activeKey = (pkg.email && userCredits[pkg.email]) ? pkg.email : (pkg.phone && userCredits[pkg.phone] ? pkg.phone : emailKey);
+
+                const nextCredits = { ...userCredits };
+                const uo = nextCredits[activeKey] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 };
+
+                nextCredits[activeKey] = {
+                    ...uo,
+                    [tier]: (uo[tier] || 0) + pkg.sessions,
+                    [`${tier}Bought`]: (uo[`${tier}Bought`] || 0) + pkg.sessions
+                };
+
+                setBookings(nextBookings);
+                setUserCredits(nextCredits);
+                await syncToCloud({ bookings: nextBookings, allContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                triggerToast("Membership verified & credits added!", "success");
+            };
+
+            const cancelPackage = (pkgKey) => {
+                setConfirmModal({
+                    message: "Reject this membership purchase?",
+                    onConfirm: async () => {
+                        const n = { ...bookings };
+                        delete n[pkgKey];
+                        setBookings(n);
+                        await syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
+                        triggerToast("Package purchase rejected.", "success");
+                    }
+                });
             };
 
             const handleStaffLogin = (e) => {
@@ -835,10 +917,9 @@
                     }
                 } else {
                     if (staffResetOtp === expectedStaffOtp || staffResetOtp === "123456") {
-                        setSystemCodes(prev => ({ 
-                            ...prev, 
-                            [staffForgotRole]: { ...prev[staffForgotRole], code: newStaffCode.toLowerCase() } 
-                        }));
+                        const nextCodes = { ...systemCodes, [staffForgotRole]: { ...systemCodes[staffForgotRole], code: newStaffCode.toLowerCase() } };
+                        setSystemCodes(nextCodes);
+                        await syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                         triggerToast("Access Token adjusted successfully!", "success"); 
                         setIsStaffForgot(false); 
                         setIsStaffOtpSent(false);
@@ -852,77 +933,70 @@
                 }
             };
 
-            const finalizeManualBooking = () => {
+            const finalizeManualBooking = async () => {
                 const { net, slot, date } = manualEntryModal;
                 const key = `${date}-${net}-${slot}`;
+                const nextBookings = { ...bookings };
+                const nextCredits = { ...userCredits };
+                let nextContacts = { ...allContacts };
                 
                 if (manualEntryType === 'maintenance' || manualEntryType === 'resting') {
-                    setBookings(prev => ({ 
-                        ...prev, 
-                        [key]: { 
-                            type: 'system', 
-                            status: manualEntryType,
-                            user: manualEntryType === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
-                            date: date, 
-                            slot: slot, 
-                            net: net, 
-                            bookingDate: new Date().toLocaleDateString('en-IN'),
-                            bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                        } 
-                    }));
+                    nextBookings[key] = { 
+                        type: 'system', status: manualEntryType,
+                        user: manualEntryType === 'resting' ? 'Facility Closed - Resting Hours' : 'Maintenance Lock', 
+                        date: date, slot: slot, net: net, 
+                        bookingDate: new Date().toLocaleDateString('en-IN'),
+                        bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                    };
+                    setBookings(nextBookings);
+                    await syncToCloud({ bookings: nextBookings, allContacts: nextContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                     triggerToast(manualEntryType === 'resting' ? "Slot locked for resting hours." : "Slot locked for maintenance.", "success");
                     setManualEntryModal(null);
                     return;
                 }
-                let price = manualPayment === 'credits' ? 0 : (slotPrices[slot] || 500);
                 
-                setBookings(prev => ({ 
-                    ...prev, 
-                    [key]: { 
-                        type: 'user', 
-                        user: manualName, 
-                        phone: manualPhone, 
-                        priceAtBooking: price, 
-                        paymentMode: manualPayment, 
-                        paymentStatus: (manualPayment === 'upi' || manualPayment === 'venue') ? 'pending' : 'verified',
-                        verificationImage: manualScreenshot ? 'Uploaded' : null,
-                        date: date, 
-                        slot: slot, 
-                        net: net, 
-                        status: null,
-                        bookingDate: new Date().toLocaleDateString('en-IN'),
-                        bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                    } 
-                }));
+                let price = manualPayment === 'credits' ? 0 : (activeSlotPrices[slot] || 500);
+                
+                nextBookings[key] = { 
+                    type: 'user', user: manualName, phone: manualPhone, 
+                    priceAtBooking: price, paymentMode: manualPayment, 
+                    paymentStatus: (manualPayment === 'upi' || manualPayment === 'venue') ? 'pending' : 'verified',
+                    verificationImage: manualScreenshot ? 'Uploaded' : null,
+                    date: date, slot: slot, net: net, status: null,
+                    bookingDate: new Date().toLocaleDateString('en-IN'),
+                    bookingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                };
 
                 if (manualPayment === 'credits') {
                     const cleanPhone = getCleanPhone(manualPhone);
-                    let match = allContacts[cleanPhone] || Object.values(allContacts).find(c => c.phone && (c.phone.endsWith(cleanPhone) || cleanPhone.endsWith(c.phone)));
+                    let match = nextContacts[cleanPhone] || Object.values(nextContacts).find(c => c.phone && (c.phone.endsWith(cleanPhone) || cleanPhone.endsWith(c.phone)));
                     if (match) {
-                        setUserCredits(prev => {
-                            const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
-                            const eKey = match.email;
-                            const pKey = getCleanPhone(match.phone);
-                            const activeKey = (eKey && prev[eKey]) ? eKey : (pKey && prev[pKey] ? pKey : (eKey || pKey));
-                            
-                            const uo = { ...prev[activeKey] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
-                            if (isWeekend) {
-                                if ((uo.weekend || 0) > 0) { uo.weekend -= 1; uo.weekendUsed = (uo.weekendUsed || 0) + 1; }
-                            } else {
-                                if ((uo.weekday || 0) > 0) { uo.weekday -= 1; uo.weekdayUsed = (uo.weekdayUsed || 0) + 1; }
-                                else if ((uo.weekend || 0) > 0) { uo.weekend -= 1; uo.weekendUsed = (uo.weekendUsed || 0) + 1; }
-                            }
-                            return { ...prev, [activeKey]: uo };
-                        });
+                        const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
+                        const eKey = match.email;
+                        const pKey = getCleanPhone(match.phone);
+                        const activeKey = (eKey && nextCredits[eKey]) ? eKey : (pKey && nextCredits[pKey] ? pKey : (eKey || pKey));
+                        
+                        const uo = { ...nextCredits[activeKey] || { weekday: 0, weekend: 0, weekdayBought: 0, weekendBought: 0, weekdayUsed: 0, weekendUsed: 0 } };
+                        if (isWeekend) {
+                            if ((uo.weekend || 0) > 0) { uo.weekend -= 1; uo.weekendUsed = (uo.weekendUsed || 0) + 1; }
+                        } else {
+                            if ((uo.weekday || 0) > 0) { uo.weekday -= 1; uo.weekdayUsed = (uo.weekdayUsed || 0) + 1; }
+                            else if ((uo.weekend || 0) > 0) { uo.weekend -= 1; uo.weekendUsed = (uo.weekendUsed || 0) + 1; }
+                        }
+                        nextCredits[activeKey] = uo;
                     }
                 }
 
                 const cleanManualPhone = getCleanPhone(manualPhone);
-                let checkMatch = allContacts[cleanManualPhone] || Object.values(allContacts).find(c => c.phone && (c.phone.endsWith(cleanManualPhone) || cleanManualPhone.endsWith(c.phone)));
+                let checkMatch = nextContacts[cleanManualPhone] || Object.values(nextContacts).find(c => c.phone && (c.phone.endsWith(cleanManualPhone) || cleanManualPhone.endsWith(c.phone)));
                 if (!checkMatch) {
-                    setAllContacts(prev => ({ ...prev, [cleanManualPhone]: { name: manualName, phone: cleanManualPhone, type: 'guest', email: '' } }));
+                    nextContacts[cleanManualPhone] = { name: manualName, phone: cleanManualPhone, type: 'guest', email: '' };
                 }
 
+                setBookings(nextBookings);
+                setUserCredits(nextCredits);
+                setAllContacts(nextContacts);
+                await syncToCloud({ bookings: nextBookings, allContacts: nextContacts, systemCodes, userCredits: nextCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                 triggerToast("Manual booking added successfully!", "success");
                 setManualEntryModal(null);
             };
@@ -939,7 +1013,6 @@
 
             return (
                 <div className="min-h-screen flex flex-col text-left">
-                    {/* Toast Notification */}
                     {toast && (
                         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[500] px-6 py-4 rounded-2xl shadow-xl font-bold flex items-center gap-3 animate-up text-white no-print ${toast.type === 'error' ? 'bg-red-600' : 'bg-slate-900'}`}>
                             {toast.type === 'error' ? <Icon name="x" className="w-5 h-5"/> : <Icon name="check-circle-2" className="w-5 h-5"/>}
@@ -947,7 +1020,6 @@
                         </div>
                     )}
 
-                    {/* Universal Confirmation Modal */}
                     {confirmModal && (
                         <div className="fixed inset-0 z-[800] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm no-print">
                             <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-up border text-center">
@@ -964,7 +1036,6 @@
                         </div>
                     )}
 
-                    {/* Facility Operations & Maintenance Bulk Modal */}
                     {showFacilityControls && (
                         <div className="fixed inset-0 z-[750] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -977,7 +1048,6 @@
                                 </div>
 
                                 <div className="p-6 md:p-8 overflow-y-auto no-scrollbar flex-1 space-y-6">
-                                    {/* Date Range Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">1. Select Date Range</p>
                                         <div className="flex gap-4">
@@ -992,7 +1062,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Scope Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">2. Select Target Area</p>
                                         <div className="flex bg-gray-100 p-1.5 rounded-2xl">
@@ -1001,7 +1070,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Nets Selection (If Scope is Nets) */}
                                     {controlScope === 'nets' && (
                                         <div className="animate-in fade-in slide-in-from-top-2">
                                             <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">Select Lanes to Block</p>
@@ -1021,7 +1089,6 @@
                                         </div>
                                     )}
 
-                                    {/* Duration Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">3. Select Duration</p>
                                         <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1053,7 +1120,6 @@
                                         )}
                                     </div>
 
-                                    {/* Reason Selection */}
                                     <div>
                                         <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-3">4. Select Reason</p>
                                         <div className="flex bg-gray-100 p-1.5 rounded-2xl">
@@ -1082,34 +1148,33 @@
                         </div>
                     )}
 
-                    {/* Super Admin Edit Password Modal */}
                     {editPasswordModal && (
                         <div className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                            <form onSubmit={(e) => {
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
                                 const val = e.target.new_pass.value;
                                 if (editPasswordModal.type === 'contact') {
-                                    setAllContacts(prev => ({ ...prev, [editPasswordModal.id]: { ...prev[editPasswordModal.id], password: val }}));
+                                    const nextContacts = { ...allContacts, [editPasswordModal.id]: { ...allContacts[editPasswordModal.id], password: val }};
+                                    setAllContacts(nextContacts);
+                                    await syncToCloud({ bookings, allContacts: nextContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                                     triggerToast("User password updated successfully.", "success");
                                 } else if (editPasswordModal.type === 'system_new') {
                                     const roleType = e.target.sys_role.value;
                                     const newKey = `${roleType}_${Date.now()}`;
-                                    setSystemCodes(prev => ({
-                                        ...prev,
+                                    const nextCodes = {
+                                        ...systemCodes,
                                         [newKey]: {
-                                            code: val.toLowerCase(),
-                                            phone: e.target.sys_phone.value,
-                                            email: e.target.sys_email.value,
-                                            name: e.target.sys_name.value,
-                                            roleType: roleType
+                                            code: val.toLowerCase(), phone: e.target.sys_phone.value,
+                                            email: e.target.sys_email.value, name: e.target.sys_name.value, roleType: roleType
                                         }
-                                    }));
+                                    };
+                                    setSystemCodes(nextCodes);
+                                    await syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                                     triggerToast("New system user added successfully.", "success");
                                 } else {
-                                    const newPhone = e.target.sys_phone.value;
-                                    const newEmail = e.target.sys_email.value;
-                                    const newName = e.target.sys_name ? e.target.sys_name.value : editPasswordModal.sysName;
-                                    setSystemCodes(prev => ({ ...prev, [editPasswordModal.id]: { ...prev[editPasswordModal.id], code: val.toLowerCase(), phone: newPhone, email: newEmail, name: newName } }));
+                                    const nextCodes = { ...systemCodes, [editPasswordModal.id]: { ...systemCodes[editPasswordModal.id], code: val.toLowerCase(), phone: e.target.sys_phone.value, email: e.target.sys_email.value, name: (e.target.sys_name ? e.target.sys_name.value : editPasswordModal.sysName) } };
+                                    setSystemCodes(nextCodes);
+                                    await syncToCloud({ bookings, allContacts, systemCodes: nextCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                                     triggerToast("System configuration updated successfully.", "success");
                                 }
                                 setEditPasswordModal(null);
@@ -1154,7 +1219,6 @@
                         </div>
                     )}
 
-                    {/* Admin Pricing Editor Modal */}
                     {showPricingModal && (userRole === 'admin' || userRole === 'superadmin') && (
                         <div className="fixed inset-0 z-[750] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1253,12 +1317,13 @@
                                 </div>
                                 <div className="p-6 md:p-8 pt-0 flex gap-4 shrink-0">
                                     <button onClick={() => setShowPricingModal(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 font-black rounded-2xl uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-colors">Cancel</button>
-                                    <button onClick={() => { 
+                                    <button onClick={async () => { 
                                         setSlotPrices(tempPrices); 
                                         setPackagePrices(tempPkgPrices); 
                                         setSlotPricesRainy(tempRainyPrices);
                                         setPackagePricesRainy(tempRainyPkgPrices);
                                         setSeasonDates(tempSeasonDates);
+                                        await syncToCloud({ bookings, allContacts, systemCodes, userCredits, slotPrices: tempPrices, blockedDays, packagePrices: tempPkgPrices, seasonDates: tempSeasonDates, slotPricesRainy: tempRainyPrices, packagePricesRainy: tempRainyPkgPrices });
                                         setShowPricingModal(false); 
                                         triggerToast("Pricing updated successfully!", "success"); 
                                     }} className="flex-1 py-4 bg-green-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-xl hover:bg-green-700 transition-all">Save Updates</button>
@@ -1267,7 +1332,6 @@
                         </div>
                     )}
 
-                    {/* Manual Entry Booking Modal for Admin/Staff */}
                     {manualEntryModal && (
                         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
                             <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-up border flex flex-col max-h-[90vh]">
@@ -1559,7 +1623,7 @@
                         </div>
                     </section>
 
-                    {/* Selected Booking Checkout Bar (Centered Modal) */}
+                    {/* Selected Booking Checkout Bar */}
                     {selections.length > 0 && userRole === 'user' && !showPayment && (
                         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm no-print animate-in fade-in">
                             <div className="w-full max-w-md bg-white p-8 rounded-[3rem] shadow-2xl border border-gray-200 flex flex-col items-center justify-center gap-6 animate-up text-center relative">
@@ -1833,6 +1897,9 @@
                                                                 <div className="text-left sm:text-right pl-13 sm:pl-0">
                                                                     <span className="text-sm font-black text-slate-800 block">₹{item.priceAtBooking}</span>
                                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{item.user || item.email || item.phone}</span>
+                                                                    {item.paymentStatus === 'verified' && item.verifiedBy && (
+                                                                        <span className="text-[8px] font-black text-emerald-600 uppercase block mt-1 text-left sm:text-right">Verified by: {item.verifiedBy} ({item.verifiedByRole})</span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1861,11 +1928,12 @@
                                                                             <span className="font-bold text-gray-900 uppercase block">{item.type === 'package' ? item.title : `Lane Booking: ${item.net}`}</span>
                                                                             <span className="text-[9px] text-gray-500 uppercase block mt-0.5">{item.type}</span>
                                                                         </td>
-                                                                        <td className="py-3">
-                                                                            <span className="font-bold text-gray-700 block">{item.user || '-'}</span>
-                                                                            <span className="text-[9px] text-gray-500 block mt-0.5">{item.email || item.phone}</span>
+                                                                        <td className="py-3 font-bold text-gray-600 uppercase">
+                                                                            {item.paymentMode}
+                                                                            {item.paymentStatus === 'verified' && item.verifiedBy && (
+                                                                                <span className="block text-[8px] text-emerald-600 mt-0.5 tracking-wider">Verified: {item.verifiedBy} ({item.verifiedByRole})</span>
+                                                                            )}
                                                                         </td>
-                                                                        <td className="py-3 font-bold text-gray-600 uppercase">{item.paymentMode}</td>
                                                                         <td className="py-3 font-black text-gray-900 text-right">₹{item.priceAtBooking}</td>
                                                                     </tr>
                                                                 ))}
@@ -2011,51 +2079,54 @@
                                                     {filteredContacts.map(([phone, user]) => {
                                                         const bal = (user.email && userCredits[user.email]) ? userCredits[user.email] : (userCredits[phone] || { weekday: 0, weekend: 0 });
                                                         return (
-                                                        <div key={phone} className="print-break-avoid bg-white p-5 rounded-2xl border shadow-sm flex flex-col gap-4">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 ${user.type === 'player' ? 'bg-green-600' : user.type === 'coach' ? 'bg-purple-600' : 'bg-slate-600'}`}>
-                                                                        <Icon name={user.type === 'coach' ? 'award' : user.type === 'guest' ? 'smartphone' : 'user'} className="w-6 h-6"/>
+                                                            <div key={phone} className="print-break-avoid bg-white p-5 rounded-2xl border shadow-sm flex flex-col gap-4">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 ${user.type === 'player' ? 'bg-green-600' : user.type === 'coach' ? 'bg-purple-600' : 'bg-slate-600'}`}>
+                                                                            <Icon name={user.type === 'coach' ? 'award' : user.type === 'guest' ? 'smartphone' : 'user'} className="w-6 h-6"/>
+                                                                        </div>
+                                                                        <div>
+                                                                            <h4 className="text-base sm:text-lg font-black text-gray-900 leading-none uppercase">{user.name}</h4>
+                                                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">{user.type}</p>
+                                                                        </div>
                                                                     </div>
-                                                                    <div>
-                                                                        <h4 className="text-base sm:text-lg font-black text-gray-900 leading-none uppercase">{user.name}</h4>
-                                                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">{user.type}</p>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-col sm:items-end gap-1.5 border-t sm:border-0 pt-3 sm:pt-0">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Icon name="phone" className="w-3.5 h-3.5 text-gray-400" />
-                                                                        <span className="text-sm font-bold text-gray-700">{user.phone}</span>
-                                                                    </div>
-                                                                    {user.email && (
+                                                                    <div className="flex flex-col sm:items-end gap-1.5 border-t sm:border-0 pt-3 sm:pt-0">
                                                                         <div className="flex items-center gap-2">
-                                                                            <Icon name="mail" className="w-3.5 h-3.5 text-gray-400" />
-                                                                            <span className="text-xs font-bold text-gray-500">{user.email}</span>
+                                                                            <Icon name="phone" className="w-3.5 h-3.5 text-gray-400" />
+                                                                            <span className="text-sm font-bold text-gray-700">{user.phone}</span>
                                                                         </div>
-                                                                    )}
-                                                                    <div className="mt-1 flex items-center gap-2">
-                                                                        <div className="flex items-center gap-1 px-2 py-1 bg-green-50 rounded-md border border-green-100" title="Weekday Credits">
-                                                                            <Icon name="award" className="w-3 h-3 text-green-600"/>
-                                                                            <span className="text-[10px] font-black text-green-700">{bal.weekday || 0} WD</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-md border border-purple-100" title="Weekend Credits">
-                                                                            <Icon name="award" className="w-3 h-3 text-purple-600"/>
-                                                                            <span className="text-[10px] font-black text-purple-700">{bal.weekend || 0} WE</span>
-                                                                        </div>
+                                                                        {user.email && (
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Icon name="mail" className="w-3.5 h-3.5 text-gray-400" />
+                                                                                <span className="text-xs font-bold text-gray-500">{user.email}</span>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
+                                                                
+                                                                <div className="flex gap-2 border-t pt-3">
+                                                                    <div className="flex-1 bg-green-50 p-2 rounded-lg text-center border border-green-100">
+                                                                        <span className="block text-[8px] font-black uppercase tracking-widest text-green-700">WD Credits</span>
+                                                                        <span className="block text-sm font-black text-green-900">{bal.weekday || 0}</span>
+                                                                    </div>
+                                                                    <div className="flex-1 bg-purple-50 p-2 rounded-lg text-center border border-purple-100">
+                                                                        <span className="block text-[8px] font-black uppercase tracking-widest text-purple-700">WE Credits</span>
+                                                                        <span className="block text-sm font-black text-purple-900">{bal.weekend || 0}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {userRole === 'superadmin' && (
+                                                                    <div className="pt-3 border-t border-dashed flex justify-between items-center w-full">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Icon name="lock" className="w-3.5 h-3.5 text-gray-400" />
+                                                                            <span className="text-[11px] font-mono font-black text-gray-600">{user.password || 'Unset'}</span>
+                                                                        </div>
+                                                                        <button onClick={() => setEditPasswordModal({ type: 'contact', id: phone, current: user.password || '', name: user.name })} className="text-[9px] font-black uppercase text-purple-600 hover:text-purple-800 tracking-widest bg-purple-50 px-3 py-1.5 rounded-lg no-print transition-colors hover:bg-purple-100">Set Password</button>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            {userRole === 'superadmin' && (
-                                                                <div className="pt-3 border-t border-dashed flex justify-between items-center w-full">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Icon name="lock" className="w-3.5 h-3.5 text-gray-400" />
-                                                                        <span className="text-[11px] font-mono font-black text-gray-600">{user.password || 'Unset'}</span>
-                                                                    </div>
-                                                                    <button onClick={() => setEditPasswordModal({ type: 'contact', id: phone, current: user.password || '', name: user.name })} className="text-[9px] font-black uppercase text-purple-600 hover:text-purple-800 tracking-widest bg-purple-50 px-3 py-1.5 rounded-lg no-print transition-colors hover:bg-purple-100">Set Password</button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )})}
+                                                        );
+                                                    })}
                                                 </div>
 
                                                 {/* Print-only simple list view for End User Contacts */}
@@ -2066,8 +2137,7 @@
                                                                 <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Name</th>
                                                                 <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Role</th>
                                                                 <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Phone</th>
-                                                                <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Email</th>
-                                                                <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Credits</th>
+                                                                <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300 text-center">WD / WE</th>
                                                                 {userRole === 'superadmin' && <th className="p-3 font-black uppercase tracking-widest text-xs border border-gray-300">Password</th>}
                                                             </tr>
                                                         </thead>
@@ -2075,15 +2145,15 @@
                                                             {filteredContacts.map(([phone, user]) => {
                                                                 const bal = (user.email && userCredits[user.email]) ? userCredits[user.email] : (userCredits[phone] || { weekday: 0, weekend: 0 });
                                                                 return (
-                                                                <tr key={`print-${phone}`} className="border-b border-gray-300 print-break-avoid">
-                                                                    <td className="p-3 border border-gray-300 font-bold text-gray-900 uppercase">{user.name}</td>
-                                                                    <td className="p-3 border border-gray-300 font-bold text-gray-500 uppercase">{user.type}</td>
-                                                                    <td className="p-3 border border-gray-300 font-bold text-gray-700">{user.phone}</td>
-                                                                    <td className="p-3 border border-gray-300 font-bold text-gray-500">{user.email || '-'}</td>
-                                                                    <td className="p-3 border border-gray-300 font-bold text-gray-700 text-xs">WD: {bal.weekday || 0} | WE: {bal.weekend || 0}</td>
-                                                                    {userRole === 'superadmin' && <td className="p-3 border border-gray-300 font-mono font-black text-gray-600">{user.password || 'Unset'}</td>}
-                                                                </tr>
-                                                            )})}
+                                                                    <tr key={`print-${phone}`} className="border-b border-gray-300 print-break-avoid">
+                                                                        <td className="p-3 border border-gray-300 font-bold text-gray-900 uppercase">{user.name}</td>
+                                                                        <td className="p-3 border border-gray-300 font-bold text-gray-500 uppercase">{user.type}</td>
+                                                                        <td className="p-3 border border-gray-300 font-bold text-gray-700">{user.phone}</td>
+                                                                        <td className="p-3 border border-gray-300 font-black text-gray-700 text-center">{bal.weekday || 0} / {bal.weekend || 0}</td>
+                                                                        {userRole === 'superadmin' && <td className="p-3 border border-gray-300 font-mono font-black text-gray-600">{user.password || 'Unset'}</td>}
+                                                                    </tr>
+                                                                );
+                                                            })}
                                                         </tbody>
                                                     </table>
                                                 </div>
@@ -2098,12 +2168,46 @@
                     {/* Staff Manifest Viewer Modal */}
                     {showStaffBookings && userRole !== 'user' && (
                         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md px-4">
-                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col border max-h-[85vh] text-left">
+                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col border max-h-[85vh] text-left">
                                 <div className="p-8 border-b flex justify-between items-center bg-gray-50 shrink-0">
-                                    <div className="text-left"><h3 className="text-2xl font-black text-gray-900 uppercase">Lane Manifest</h3><p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 text-left">{new Date(selectedDate).toDateString()}</p></div>
+                                    <div className="text-left"><h3 className="text-2xl font-black text-gray-900 uppercase">Facility Manifest</h3><p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 text-left">{new Date(selectedDate).toDateString()}</p></div>
                                     <button onClick={() => setShowStaffBookings(false)} className="p-3 bg-white border border-gray-200 text-onyx rounded-full transition-all hover:bg-gray-100"><Icon name="x" className="w-5 h-5"/></button>
                                 </div>
-                                <div id="manifest-area" className="p-8 overflow-y-auto no-scrollbar bg-white flex-1 text-left">
+                                <div id="manifest-area" className="p-6 md:p-8 overflow-y-auto no-scrollbar bg-white flex-1 text-left">
+                                    
+                                    {/* NEW: Pending Packages Section */}
+                                    {pendingPackages.length > 0 && (
+                                        <div className="mb-8 bg-purple-50 p-6 rounded-[2rem] border border-purple-100 animate-in fade-in">
+                                            <h4 className="text-[11px] font-black uppercase text-purple-900 tracking-widest mb-4 flex items-center gap-2">
+                                                <Icon name="award" className="w-5 h-5"/> Pending Membership Approvals
+                                            </h4>
+                                            <div className="space-y-3">
+                                                {pendingPackages.map((item) => (
+                                                    <div key={item.key} className="p-4 bg-white border border-purple-100 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="px-2 py-0.5 bg-purple-600 text-white text-[9px] font-black rounded uppercase">{item.tier} Pack</span>
+                                                                <span className="text-xs font-black uppercase text-purple-900">{item.sessions} Sessions</span>
+                                                            </div>
+                                                            <p className="text-sm font-black text-gray-900 mt-1 uppercase leading-none">{item.user || item.email || item.phone}</p>
+                                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">₹{item.priceAtBooking} • {item.paymentMode}</p>
+                                                        </div>
+                                                        <div className="flex gap-2 items-center shrink-0">
+                                                            {(userRole === 'admin' || userRole === 'superadmin') ? (
+                                                                <button onClick={() => verifyPackage(item.key)} className="px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm">Verify & Credit</button>
+                                                            ) : (
+                                                                <span className="px-4 py-2.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-xl text-[10px] font-black uppercase tracking-widest">Verify Pending</span>
+                                                            )}
+                                                            {(userRole === 'admin' || userRole === 'superadmin') && (
+                                                                <button onClick={() => cancelPackage(item.key)} className="p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-full transition-all"><Icon name="x" className="w-5 h-5"/></button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {dayBookingsList.length === 0 ? <p className="text-center py-20 font-black text-slate-200 uppercase tracking-widest text-left">No Matrix Activity Recorded</p> : (
                                         <div className="space-y-4">
                                             {dayBookingsList.map((item, idx) => {
@@ -2119,10 +2223,9 @@
                                                                 <button onClick={() => { 
                                                                     setConfirmModal({
                                                                         message: isResting ? "Remove this resting hours block?" : "Remove this maintenance block?",
-                                                                        onConfirm: () => {
-                                                                            const n = {...bookings}; 
-                                                                            delete n[item.key]; 
-                                                                            setBookings(n);
+                                                                        onConfirm: async () => {
+                                                                            const n = {...bookings}; delete n[item.key]; setBookings(n);
+                                                                            await syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                                                                             triggerToast("Slot opened.", "success");
                                                                         }
                                                                     });
@@ -2153,9 +2256,15 @@
                                                         </div>
                                                         <div className="flex gap-2 no-print items-center">
                                                             {(item.paymentMode === 'upi' || item.paymentMode === 'venue') && (
-                                                                <button onClick={() => togglePaymentStatus(item.key)} className={`px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${item.paymentStatus === 'verified' ? 'bg-white border-gray-200 text-gray-400 hover:text-orange-500' : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white'}`}>
-                                                                    {item.paymentStatus === 'verified' ? 'Unverify' : 'Verify Pay'}
-                                                                </button>
+                                                                (userRole === 'admin' || userRole === 'superadmin') ? (
+                                                                    <button onClick={() => togglePaymentStatus(item.key)} className={`px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${item.paymentStatus === 'verified' ? 'bg-white border-gray-200 text-gray-400 hover:text-orange-500' : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white'}`}>
+                                                                        {item.paymentStatus === 'verified' ? 'Unverify' : 'Verify Pay'}
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className={`px-3 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest border-2 ${item.paymentStatus === 'verified' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
+                                                                        {item.paymentStatus === 'verified' ? `Verified by ${item.verifiedBy || 'Admin'} (${item.verifiedByRole || ''})` : 'Verify Pending'}
+                                                                    </div>
+                                                                )
                                                             )}
                                                             <button onClick={() => toggleOccupy(item.key)} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${item.status === 'occupied' ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-white border-gray-200 text-slate-400 hover:border-emerald-50 hover:text-emerald-600'}`}>
                                                                 {item.status === 'occupied' ? 'Occupied' : 'Mark Occupy'}
@@ -2163,10 +2272,9 @@
                                                             <button onClick={() => { 
                                                                 setConfirmModal({
                                                                     message: "Cancel booking due to payment failure or player request?",
-                                                                    onConfirm: () => {
-                                                                        const n = {...bookings}; 
-                                                                        delete n[item.key]; 
-                                                                        setBookings(n);
+                                                                    onConfirm: async () => {
+                                                                        const n = {...bookings}; delete n[item.key]; setBookings(n);
+                                                                        await syncToCloud({ bookings: n, allContacts, systemCodes, userCredits, slotPrices, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy });
                                                                         triggerToast("Booking cancelled & removed.", "success");
                                                                     }
                                                                 });
@@ -2368,8 +2476,9 @@
                                                             <Icon name="upload-cloud" className="text-slate-300 group-hover:text-green-600 w-6 h-6 transition-colors"/>
                                                         )}
                                                         <span className="text-[11px] font-black uppercase text-slate-500 group-hover:text-green-600">
-                                                            {screenshotPreview ? "Proof Attached" : "Upload Screenshot"}
+                                                            {screenshotPreview ? "Payment Proof Attached" : "Choose Transaction Screenshot"}
                                                         </span>
+                                                        <span className="text-[9px] font-bold text-slate-400 leading-none">JPEG, PNG accepted</span>
                                                     </div>
                                                 </label>
                                             </div>
