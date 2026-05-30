@@ -10,9 +10,6 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
-    <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         :root { --sd-green: #16a34a; --sd-dark: #111827; }
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
@@ -51,9 +48,6 @@
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5Ymt1cGJycHRtbmxpZW9saXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNjkxOTcsImV4cCI6MjA5Mjk0NTE5N30.OOSbzF36KLewkcfGxkFnsM6y9f6a5vc4KZkRlNK-lHI";
         
         let supabase = null;
-        if (window.supabase) {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        }
 
         const EMAILJS_PUBLIC_KEY = "9EVo1NqFOOmGWKndd";
         const EMAILJS_PRIVATE_KEY = "L_sKs7-2b_Jx9M1OZ9mgj";
@@ -215,14 +209,30 @@
             const [isAppReady, setIsAppReady] = useState(false);
             const lastUploadedPayload = React.useRef('');
 
-            // 1. Fetch remote data and enable REAL-TIME cloud sync
             useEffect(() => {
-                const fetchRemoteData = async () => {
-                    if (!supabase) {
-                        setIsAppReady(true);
-                        return;
-                    }
+                let channel = null;
+
+                const initSupabaseAndFetch = async () => {
                     try {
+                        // Dynamically load the Supabase script if it failed to load in the HTML
+                        if (!window.supabase) {
+                            await new Promise((resolve, reject) => {
+                                const script = document.createElement('script');
+                                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+                                script.onload = resolve;
+                                script.onerror = reject;
+                                document.head.appendChild(script);
+                            });
+                        }
+
+                        // Build connection safely
+                        if (!supabase && window.supabase) {
+                            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                        }
+
+                        if (!supabase) throw new Error("Failed to initialize database client.");
+
+                        // Fetch real data from Cloud
                         const { data, error } = await supabase.from('app_settings').select('*').eq('id', 'global').single();
                         if (data && data.payload) {
                             const p = data.payload;
@@ -238,38 +248,39 @@
                             if (p.slotPricesRainy) setSlotPricesRainy(p.slotPricesRainy);
                             if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
                         }
+
+                        // Activate Realtime Sync
+                        channel = supabase.channel('realtime_app_settings')
+                            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
+                                const p = payload.new.payload;
+                                if (p) {
+                                    lastUploadedPayload.current = JSON.stringify(p);
+                                    if (p.bookings) setBookings(p.bookings);
+                                    if (p.allContacts) setAllContacts(p.allContacts);
+                                    if (p.systemCodes) setSystemCodes(p.systemCodes);
+                                    if (p.userCredits) setUserCredits(p.userCredits);
+                                    if (p.slotPrices) setSlotPrices(p.slotPrices);
+                                    if (p.blockedDays) setBlockedDays(p.blockedDays);
+                                    if (p.packagePrices) setPackagePrices(p.packagePrices);
+                                    if (p.seasonDates) setSeasonDates(p.seasonDates);
+                                    if (p.slotPricesRainy) setSlotPricesRainy(p.slotPricesRainy);
+                                    if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
+                                }
+                            })
+                            .subscribe();
+
                     } catch (err) {
                         console.error("Supabase sync failed, falling back to local storage.", err);
+                    } finally {
+                        setIsAppReady(true);
                     }
-                    setIsAppReady(true);
                 };
-                fetchRemoteData();
 
-                if (supabase) {
-                    const channel = supabase.channel('realtime_app_settings')
-                        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, (payload) => {
-                            const p = payload.new.payload;
-                            if (p) {
-                                lastUploadedPayload.current = JSON.stringify(p);
-                                if (p.bookings) setBookings(p.bookings);
-                                if (p.allContacts) setAllContacts(p.allContacts);
-                                if (p.systemCodes) setSystemCodes(p.systemCodes);
-                                if (p.userCredits) setUserCredits(p.userCredits);
-                                if (p.slotPrices) setSlotPrices(p.slotPrices);
-                                if (p.blockedDays) setBlockedDays(p.blockedDays);
-                                if (p.packagePrices) setPackagePrices(p.packagePrices);
-                                if (p.seasonDates) setSeasonDates(p.seasonDates);
-                                if (p.slotPricesRainy) setSlotPricesRainy(p.slotPricesRainy);
-                                if (p.packagePricesRainy) setPackagePricesRainy(p.packagePricesRainy);
-                            }
-                        })
-                        .subscribe();
-                    
-                    return () => { supabase.removeChannel(channel); };
-                }
+                initSupabaseAndFetch();
+
+                return () => { if (channel && supabase) supabase.removeChannel(channel); };
             }, []);
 
-            // 2. Master Sync: Save to LocalStorage AND Push to Cloud smartly
             useEffect(() => {
                 if (!isAppReady) return; 
 
@@ -297,9 +308,7 @@
                     lastUploadedPayload.current = newPayloadStr;
 
                     supabase.from('app_settings').upsert({ id: 'global', payload }).then(({error}) => {
-                        if (error) {
-                            console.error("Cloud save error:", error);
-                        }
+                        if (error) console.error("Cloud save error:", error);
                     });
                 }
             }, [isAppReady, bookings, allContacts, systemCodes, userCredits, slotPrices, currentUser, blockedDays, packagePrices, seasonDates, slotPricesRainy, packagePricesRainy]);
@@ -309,9 +318,8 @@
                 setTimeout(() => setToast(null), 4000);
             };
 
-            // NEW DIAGNOSTIC TOOL: Force Sync Button Logic
             const forceSyncToCloud = async () => {
-                if (!supabase) return triggerToast("Database offline. Missing Keys.", "error");
+                if (!supabase) return triggerToast("Database offline. Connection blocked.", "error");
                 setIsProcessing(true);
                 triggerToast("Force Syncing...", "success");
                 try {
@@ -709,7 +717,7 @@
                         dateOfBooking: now.toLocaleDateString('en-IN'), timeOfBooking: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
                         trainingDate: selectedDate, details: selections.map(s => ({ net: s.net, slot: s.slot })),
                         paymentStatus: paymentMethod === 'upi' ? 'Verification Pending' : ((paymentMethod === 'weekday_credits' || paymentMethod === 'weekend_credits') ? 'Paid via Credits' : 'Pay at Ground'),
-                        amount: finalPayable, verificationImage: screenshotPreview ? 'Uploaded' : null // COMPRESS DB SAVE
+                        amount: finalPayable, verificationImage: screenshotPreview ? 'Uploaded' : null 
                     };
 
                     const next = { ...bookings };
@@ -771,7 +779,6 @@
                         triggerToast("Nets reserved successfully!", "success");
                     }
                     
-                    // Show full ticket with image locally
                     const ticketToRender = { ...newTicket, verificationImage: screenshotPreview };
                     setTicketData(ticketToRender); 
                     setIsProcessing(false); setIsSuccess(true); setSelections([]); setSelectedPackage(null); setShowPayment(false); setScreenshotPreview(null);
@@ -2347,7 +2354,6 @@
                                                         <span className="text-[11px] font-black uppercase text-slate-500 group-hover:text-green-600">
                                                             {screenshotPreview ? "Proof Attached" : "Upload Screenshot"}
                                                         </span>
-                                                        <span className="text-[9px] font-bold text-slate-400 leading-none">JPEG, PNG accepted</span>
                                                     </div>
                                                 </label>
                                             </div>
